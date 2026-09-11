@@ -19,6 +19,8 @@ interface Props {
 
 /** How often the live poll checks hasChanges() and, if true, re-diffs the editor's own render against the reference bitmap. */
 const DELTA_POLL_INTERVAL_MS = 1500;
+/** hasChanges() alone is a cheap, synchronous call with no image decode, so the TRANSMIT gate can afford to poll it more often than the delta diff. */
+const HAS_CHANGES_POLL_INTERVAL_MS = 500;
 
 /** Decodes a data URL to a DIFF_SIZE x DIFF_SIZE ImageData -- decode and downsample happen together via one scaled drawImage, cheap enough to run on every poll tick. */
 function decodeToDeltaBitmap(dataUrl: string): Promise<ImageData> {
@@ -139,6 +141,28 @@ export function EditorPanel({ image, suspect, config, controlNumber, onLiveDelta
     return () => clearInterval(id);
   }, []);
 
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Polls hasChanges() to gate the external TRANSMIT control in our own
+  // chrome -- the only way to know the SDK's internal save button would
+  // currently have anything to save, since the SDK exposes no change event.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setHasChanges(ref.current?.editor?.hasChanges() ?? false);
+    }, HAS_CHANGES_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // Shared by both save paths -- the editor's own internal save button (via
+  // onSave) and the external TRANSMIT control (via getImage()) -- so they
+  // always produce an identical Bulletin.
+  const handleSave = (dataUrl: string) => {
+    issue(
+      { suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() },
+      evaluate(config, suspect, suspicion, act, liveDeltaRef.current),
+    );
+  };
+
   /**
    * MUST be memoized. Only theme/locale/translations update in place; any
    * other options change destroys and recreates the editor, losing edits.
@@ -163,19 +187,32 @@ export function EditorPanel({ image, suspect, config, controlNumber, onLiveDelta
   );
 
   return (
-    <div className="flex h-full overflow-hidden bg-panel" style={{ minHeight }}>
+    <div className="flex h-full flex-col overflow-hidden bg-panel" style={{ minHeight }}>
+      {/* Terminal chrome, not the SDK's own save button -- dim and inert until hasChanges() says there's something to transmit. */}
+      <div className="flex items-center justify-end border-b border-phosphor-dim/40 px-3 py-1.5">
+        <button
+          type="button"
+          disabled={!hasChanges}
+          onClick={() => {
+            const dataUrl = ref.current?.editor?.getImage();
+            if (dataUrl) handleSave(dataUrl);
+          }}
+          className={`px-3 py-1 text-[11px] tracking-wider ${
+            hasChanges
+              ? 'border border-amber text-amber hover:bg-amber/10'
+              : 'cursor-not-allowed border border-phosphor-dim/30 text-phosphor-dim/50'
+          }`}
+        >
+          TRANSMIT BULLETIN
+        </button>
+      </div>
       <ImageEditor
         ref={ref}
         image={image}
         minHeight={minHeight}
         style={{ height: '100%' }}
         options={options}
-        onSave={({ dataUrl }: SaveResult) => {
-          issue(
-            { suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() },
-            evaluate(config, suspect, suspicion, act, liveDeltaRef.current),
-          );
-        }}
+        onSave={({ dataUrl }: SaveResult) => handleSave(dataUrl)}
         onCancel={() => {
           if (ref.current?.editor?.hasChanges()) {
             requestPrompt({ kind: 'discard-bulletin' });
