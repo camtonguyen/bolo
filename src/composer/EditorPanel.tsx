@@ -5,7 +5,7 @@ import { evaluate } from '../scoring/recognition';
 import { computeDelta, DIFF_SIZE } from '../canvas/diff';
 import type { CompositeConfig } from '../canvas/pipeline';
 import type { SuspectId } from '../data/suspects';
-import type { EditorOptions, ImageEditorRef, SaveResult } from '../lib/unlayer';
+import type { DispatchLocale, EditorOptions, ImageEditorRef, SaveResult } from '../lib/unlayer';
 import type { ControlNumber } from '../lib/brand';
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
   suspect: SuspectId;
   config: CompositeConfig;
   controlNumber: ControlNumber;
+  locale: DispatchLocale;
   /** Lifts the live forensic-diff reading up for ComposerStage's readout (Part 1.4) -- display only, EditorPanel keeps its own copy for scoring. */
   onLiveDeltaChange?: (delta: number) => void;
 }
@@ -69,7 +70,7 @@ function useEditorMinHeight(): number {
  * Props: image, options, editorId, minHeight, style, onLoad, onSave,
  * onCancel, onLoadError, onError.
  */
-export function EditorPanel({ image, suspect, config, controlNumber, onLiveDeltaChange }: Props) {
+export function EditorPanel({ image, suspect, config, controlNumber, locale, onLiveDeltaChange }: Props) {
   const ref = useRef<ImageEditorRef>(null);
   const issue = useTerminal((s) => s.issue);
   const suspicion = useTerminal((s) => s.suspicion);
@@ -165,12 +166,16 @@ export function EditorPanel({ image, suspect, config, controlNumber, onLiveDelta
 
   /**
    * MUST be memoized. Only theme/locale/translations update in place; any
-   * other options change destroys and recreates the editor, losing edits.
+   * other options change destroys and recreates the editor, losing edits --
+   * so `locale` is the only thing in this dependency array. Confirmed from
+   * the compiled component (see the unlayer-editor skill): it diffs `locale`
+   * out of the remount key itself, so changing it here re-renders `options`
+   * but never touches `editorRef`, `hasChanges()`, or either poll above.
    */
   const options = useMemo(
     () => ({
       theme: 'dark' as const,
-      locale: 'en',
+      locale,
       translations: {
         en: {
           'image_editor.toolbar.save': 'Issue bulletin',
@@ -183,7 +188,7 @@ export function EditorPanel({ image, suspect, config, controlNumber, onLiveDelta
         },
       },
     }) satisfies EditorOptions,
-    [],
+    [locale],
   );
 
   return (

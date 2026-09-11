@@ -11,11 +11,21 @@ import type { Suspicion } from '../scoring/technique';
 import type { Act } from '../state/act';
 import { MARKERS } from '../data/markers';
 import { EditorPanel } from './EditorPanel';
+import type { DispatchLocale } from '../lib/unlayer';
 
 const LOOKS: readonly { id: LookId; label: string }[] = [
   { id: 'raw', label: 'RAW SCAN' },
   { id: 'archival', label: 'ARCHIVAL' },
   { id: 'degraded', label: 'DEGRADED' },
+];
+
+// Framed in-world as which regional precincts the bulletin broadcasts to --
+// backs the editor's own `locale`, so the label doubles as the dispatch flavor text.
+const DISPATCH_LANGUAGES: readonly { id: DispatchLocale; label: string }[] = [
+  { id: 'en', label: 'LEONIDA CENTRAL' },
+  { id: 'es', label: 'PORT VERONA SUR' },
+  { id: 'fr', label: 'BAYOU PRECINCT' },
+  { id: 'de', label: 'NORTH SHORE' },
 ];
 
 const OVERLAYS: readonly { id: OverlayId; label: string }[] = [
@@ -44,6 +54,7 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   // One control number per composition session — stamped onto the plate and
   // carried onto the issued bulletin, so both must agree on the same value.
   const [controlNumber] = useState(() => generateControlNumber());
+  const [locale, setLocale] = useState<DispatchLocale>('en');
   const previewRef = useRef<HTMLDivElement>(null);
   // Mirrors EditorPanel's live forensic-diff reading for the ALTERATION readout below -- display only, EditorPanel keeps its own copy for scoring at save time.
   const [liveDelta, setLiveDelta] = useState(0);
@@ -243,6 +254,21 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               />
             </label>
 
+            <label className="block space-y-1">
+              <span className="text-phosphor-dim">DISPATCH LANGUAGE</span>
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as DispatchLocale)}
+                className="w-full border border-phosphor-dim bg-transparent px-2 py-1.5"
+              >
+                {DISPATCH_LANGUAGES.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             {/* Terminal-styled readout, not a progress bar -- the payoff for Part 1: proof that the SDK's own crop/text/sticker tools do something, updating live as the player uses them. */}
             <p className="font-mono text-[11px] tracking-wider text-phosphor-dim">
               ALTERATION: <span className="text-amber">{Math.round(liveDelta * 100)}%</span>
@@ -259,6 +285,7 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
             suspect={suspect}
             config={config}
             controlNumber={controlNumber}
+            locale={locale}
             onLiveDeltaChange={setLiveDelta}
           />
         </>
