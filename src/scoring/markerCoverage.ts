@@ -1,45 +1,35 @@
 import { SUSPECTS, type SuspectId } from '../data/suspects';
 import { MARKERS, type Marker } from '../data/markers';
-import { STAMPS } from '../assets/stamps';
-import { PLATE_WIDTH, PLATE_HEIGHT, PORTRAIT_WINDOW, type CompositeConfig, type OverlayPlacement } from '../canvas/pipeline';
-
-type Rect = { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
+import { overlayRect, type Rect, type OverlayPlacement } from '../canvas/overlays';
+import { PLATE_WIDTH, PLATE_HEIGHT, fitPortraitRect, type CompositeConfig } from '../canvas/pipeline';
 
 /**
  * Marker regions are normalized against each portrait's own raw pixel
  * bounds (how the marker authoring tool draws them, over the <img> alone).
  * Overlays are normalized against the full plate canvas. This projects a
- * marker into that same canvas-normalized space, reusing pipeline.ts's own
- * drawPortrait scale-to-fit math so the two never drift apart.
+ * marker into that same canvas-normalized space, calling pipeline.ts's own
+ * fitPortraitRect() so the two never drift apart.
  */
 /** Exported so the composer's marker overlay (Part 5.2) can position boxes in the same space, not just score them. */
 export function markerCanvasRect(suspect: SuspectId, region: Rect): Rect {
-  const { w: imgW, h: imgH } = SUSPECTS[suspect].portraitSize;
-  const scale = Math.min(PORTRAIT_WINDOW.width / imgW, PORTRAIT_WINDOW.height / imgH);
-  const renderedW = imgW * scale;
-  const renderedH = imgH * scale;
-  const offsetX = PORTRAIT_WINDOW.x + (PORTRAIT_WINDOW.width - renderedW) / 2;
-  const offsetY = PORTRAIT_WINDOW.y + (PORTRAIT_WINDOW.height - renderedH) / 2;
+  const rendered = fitPortraitRect(SUSPECTS[suspect].portraitSize);
 
   return {
-    x: (offsetX + region.x * renderedW) / PLATE_WIDTH,
-    y: (offsetY + region.y * renderedH) / PLATE_HEIGHT,
-    w: (region.w * renderedW) / PLATE_WIDTH,
-    h: (region.h * renderedH) / PLATE_HEIGHT,
+    x: (rendered.x + region.x * rendered.w) / PLATE_WIDTH,
+    y: (rendered.y + region.y * rendered.h) / PLATE_HEIGHT,
+    w: (region.w * rendered.w) / PLATE_WIDTH,
+    h: (region.h * rendered.h) / PLATE_HEIGHT,
   };
 }
 
 /**
- * Same sizing math as canvas/overlays.ts's drawOverlay, in normalized units
- * instead of pixels. Exported so recognition.ts can price tamper by how much
- * of the plate an overlay actually covers, instead of a flat per-instance
- * cost that would make picking the biggest stamp strictly dominant.
+ * Same sizing math as canvas/overlays.ts's drawOverlay, via its shared
+ * overlayRect(). Exported so recognition.ts can price tamper by how much of
+ * the plate an overlay actually covers, instead of a flat per-instance cost
+ * that would make picking the biggest stamp strictly dominant.
  */
 export function overlayCanvasRect(placement: OverlayPlacement): Rect {
-  const stamp = STAMPS[placement.id];
-  const w = stamp.widthFraction;
-  const h = (w * (PLATE_WIDTH / PLATE_HEIGHT)) / stamp.aspectRatio;
-  return { x: placement.x - w / 2, y: placement.y - h / 2, w, h };
+  return overlayRect(placement, PLATE_WIDTH / PLATE_HEIGHT);
 }
 
 function intersectionArea(a: Rect, b: Rect): number {

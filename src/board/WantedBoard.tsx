@@ -1,5 +1,6 @@
 import { useTerminal } from '../state/terminal';
 import { SUSPECTS } from '../data/suspects';
+import { BulletinThumb } from '../terminal/BulletinThumb';
 
 export function WantedBoard() {
   const bulletins = useTerminal((s) => s.bulletins);
@@ -18,13 +19,15 @@ export function WantedBoard() {
         Issued bulletins
       </h1>
       {bulletins.map((b) => (
-        <figure key={b.controlNumber} className="space-y-2">
-          <img src={b.posterDataUrl} alt="" className="w-full border border-phosphor-dim" />
-          <figcaption className="text-[10px] text-phosphor-dim">
-            {b.suspect} · {SUSPECTS[b.suspect].name} · {b.controlNumber} ·{' '}
-            {new Date(b.issuedAt).toLocaleTimeString()}
-          </figcaption>
-        </figure>
+        <BulletinThumb
+          key={b.controlNumber}
+          bulletin={b}
+          caption={
+            <>
+              {b.suspect} · {SUSPECTS[b.suspect].name} · {b.controlNumber} · {new Date(b.issuedAt).toLocaleTimeString()}
+            </>
+          }
+        />
       ))}
     </div>
   );

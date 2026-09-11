@@ -7,6 +7,13 @@ export interface OverlayPlacement {
   readonly y: number;
 }
 
+export interface Rect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
 const cache = new Map<OverlayId, HTMLImageElement>();
 
 /**
@@ -34,6 +41,19 @@ async function loadOverlayImage(id: OverlayId): Promise<HTMLImageElement> {
   return image;
 }
 
+/**
+ * An overlay's placement rect in the plate's own normalized 0-1 space
+ * (not pixels) -- the one sizing formula for a stamp, shared by drawOverlay()
+ * and scoring/markerCoverage.ts's overlayCanvasRect() instead of each
+ * carrying their own copy. `plateAspect` is the plate's width/height.
+ */
+export function overlayRect(placement: OverlayPlacement, plateAspect: number): Rect {
+  const stamp = STAMPS[placement.id];
+  const w = stamp.widthFraction;
+  const h = (w * plateAspect) / stamp.aspectRatio;
+  return { x: placement.x - w / 2, y: placement.y - h / 2, w, h };
+}
+
 /** Draws one overlay, sized from its registry aspect ratio and centered at its normalized placement. */
 export async function drawOverlay(
   ctx: CanvasRenderingContext2D,
@@ -41,11 +61,7 @@ export async function drawOverlay(
   canvasWidth: number,
   canvasHeight: number,
 ): Promise<void> {
-  const stamp = STAMPS[placement.id];
   const image = await loadOverlayImage(placement.id);
-  const w = canvasWidth * stamp.widthFraction;
-  const h = w / stamp.aspectRatio;
-  const x = placement.x * canvasWidth - w / 2;
-  const y = placement.y * canvasHeight - h / 2;
-  ctx.drawImage(image, x, y, w, h);
+  const rect = overlayRect(placement, canvasWidth / canvasHeight);
+  ctx.drawImage(image, rect.x * canvasWidth, rect.y * canvasHeight, rect.w * canvasWidth, rect.h * canvasHeight);
 }

@@ -1,5 +1,5 @@
 // Run with: npm run test
-import { deriveTechniques, incrementSuspicion, ZERO_SUSPICION } from './technique';
+import { deriveTechniques, incrementSuspicion, mostSuspicious, ZERO_SUSPICION } from './technique';
 import type { CompositeConfig } from '../canvas/pipeline';
 import { assertEqual } from '../test/assert';
 
@@ -28,6 +28,19 @@ assertEqual(
   incrementSuspicion({ grade: 2, overlay: 0, substitution: 0 }, ['grade', 'overlay']),
   { grade: 3, overlay: 1, substitution: 0 },
   'bumps each used technique from its prior count',
+);
+
+assertEqual(mostSuspicious([], ZERO_SUSPICION), null, 'no techniques used: nothing to call out');
+assertEqual(mostSuspicious(['grade'], ZERO_SUSPICION), 'grade', 'a single technique is trivially the most suspicious');
+assertEqual(
+  mostSuspicious(['grade', 'overlay'], { grade: 1, overlay: 4, substitution: 0 }),
+  'overlay',
+  'picks the technique with the higher prior-use count',
+);
+assertEqual(
+  mostSuspicious(['grade', 'overlay'], ZERO_SUSPICION),
+  'grade',
+  'a tie keeps the first candidate',
 );
 
 console.log('technique.test.ts: ok');

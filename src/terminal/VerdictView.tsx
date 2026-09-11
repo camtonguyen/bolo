@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTerminal, useAct } from '../state/terminal';
 import type { Verdict } from '../scoring/recognition';
-import { deriveTechniques, type Suspicion, type Technique } from '../scoring/technique';
+import { deriveTechniques, mostSuspicious, type Suspicion, type Technique } from '../scoring/technique';
 import type { CompositeConfig } from '../canvas/pipeline';
-import type { Act } from '../state/act';
+import { actPolicy, type Act } from '../state/act';
 import type { SuspectId } from '../data/suspects';
 import { VERDICT_MOTION } from './motion';
 
@@ -57,12 +57,11 @@ function ordinal(n: number): string {
 
 function reyesNote(config: CompositeConfig, suspicion: Suspicion, act: Act): string | null {
   const named = deriveTechniques(config).filter((t): t is 'grade' | 'overlay' => t in REYES_ADJECTIVE);
-  if (named.length === 0) return null;
-  const worst = named.reduce((a, b) => (suspicion[b] > suspicion[a] ? b : a));
+  const worst = mostSuspicious(named, suspicion);
+  if (!worst) return null;
   const count = ordinal(suspicion[worst]);
   const adjective = REYES_ADJECTIVE[worst];
-  // Act III: she's stopped explaining herself -- shorter every time, not just this one.
-  return act === 'III' ? `REYES — ${count} ${adjective}. Noted.` : `REYES — ${count} ${adjective} bulletin this week.`;
+  return actPolicy(act).reyesTerse ? `REYES — ${count} ${adjective}. Noted.` : `REYES — ${count} ${adjective} bulletin this week.`;
 }
 
 export function VerdictView({ suspect, verdict }: { suspect: SuspectId; verdict: Verdict }) {
@@ -77,9 +76,9 @@ export function VerdictView({ suspect, verdict }: { suspect: SuspectId; verdict:
   // Bars start at 0 and animate to their measured value on mount; the
   // dispatch response waits for that fill (VERDICT_MOTION.barFillMs) before
   // it appears, so the verdict reads as a measurement completing rather
-  // than a number and an explanation landing at once. Act III: dispatch
-  // drags -- Internal Affairs slows everything down.
-  const barFillMs = act === 'III' ? VERDICT_MOTION.barFillMsActIII : VERDICT_MOTION.barFillMs;
+  // than a number and an explanation landing at once. See actPolicy's
+  // slowDispatch for why Act III takes longer.
+  const barFillMs = actPolicy(act).slowDispatch ? VERDICT_MOTION.barFillMsActIII : VERDICT_MOTION.barFillMs;
   useEffect(() => {
     if (prefersReducedMotion()) return;
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setFilled(true)));

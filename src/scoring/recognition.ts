@@ -3,7 +3,7 @@ import { LOOKS } from '../canvas/looks';
 import type { SuspectId } from '../data/suspects';
 import { coverageMatch, overlayCanvasRect } from './markerCoverage';
 import type { Suspicion } from './technique';
-import type { Act } from '../state/act';
+import { actPolicy, type Act } from '../state/act';
 
 /**
  * The game mechanic. Reads the SAME serializable config the compositor
@@ -57,9 +57,6 @@ const overlayTamper = (config: CompositeConfig): number =>
 const SUSPICION_WEIGHT = 0.12;
 const suspicionMultiplier = (priorUses: number): number => 1 + priorUses * SUSPICION_WEIGHT;
 
-/** Act III: Internal Affairs is watching, on top of whatever Reyes already suspects. Flat, on the whole tamper total, not per-technique. */
-const ACT_III_SCRUTINY_MULTIPLIER = 1.25;
-
 export function evaluate(config: CompositeConfig, suspect: SuspectId, suspicion: Suspicion, act: Act): Verdict {
   const grade = gradeIntensity(config);
 
@@ -70,8 +67,8 @@ export function evaluate(config: CompositeConfig, suspect: SuspectId, suspicion:
   const match = config.substitutedPortrait ? 0 : clamp(coverageMatch(suspect, config, grade));
   const gradeTamper = grade * TAMPER.GRADE_MAX * suspicionMultiplier(suspicion.grade);
   const overlayTamperTotal = overlayTamper(config) * suspicionMultiplier(suspicion.overlay);
-  const scrutiny = act === 'III' ? ACT_III_SCRUTINY_MULTIPLIER : 1;
-  const tamper = clamp((gradeTamper + overlayTamperTotal) * scrutiny);
+  // Act III: Internal Affairs is watching, on top of whatever Reyes already suspects. Flat, on the whole tamper total, not per-technique.
+  const tamper = clamp((gradeTamper + overlayTamperTotal) * actPolicy(act).tamperScrutiny);
 
   if (tamper >= TAMPER_THRESHOLD) {
     return { match, tamper, outcome: 'flagged', heatDelta: 25 };

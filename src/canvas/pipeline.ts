@@ -40,11 +40,10 @@ const HEIGHT = 1360;
 const WINDOW = { x: 300, y: 400, width: 400, height: 500 } as const;
 
 // Exported so scoring/markerCoverage.ts can project a marker's portrait-space
-// region into the same plate-normalized space overlays already use, with the
-// exact fit math drawPortrait() below uses -- not a second, drifting copy.
+// region into the same plate-normalized space overlays already use, via
+// fitPortraitRect() below -- not a second, drifting copy of its math.
 export const PLATE_WIDTH = WIDTH;
 export const PLATE_HEIGHT = HEIGHT;
-export const PORTRAIT_WINDOW = WINDOW;
 
 /**
  * Portrait -> official bulletin plate -> data URL for <ImageEditor image={...} />.
@@ -53,14 +52,14 @@ export const PORTRAIT_WINDOW = WINDOW;
  * stickers, fonts, colours or filter presets.
  */
 export async function composite(
-  portrait: Blob,
+  portraitUrl: string,
   suspect: SuspectId,
   config: CompositeConfig,
   controlNumber: ControlNumber,
 ): Promise<string> {
   await ensureFontsLoaded();
 
-  const image = await loadImage(portrait);
+  const image = await loadPortraitImage(portraitUrl);
 
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
@@ -181,34 +180,63 @@ function drawCornerMarks(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.restore();
 }
 
-/** Fits the portrait into the window without distorting its aspect ratio. */
-function drawPortrait(ctx: CanvasRenderingContext2D, image: HTMLImageElement): void {
-  const scale = Math.min(WINDOW.width / image.naturalWidth, WINDOW.height / image.naturalHeight);
-  const w = image.naturalWidth * scale;
-  const h = image.naturalHeight * scale;
-  const x = WINDOW.x + (WINDOW.width - w) / 2;
-  const y = WINDOW.y + (WINDOW.height - h) / 2;
-  ctx.drawImage(image, x, y, w, h);
+export interface FittedRect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
 }
 
 /**
- * createImageBitmap() cannot decode SVG sources in Chrome -- only raster
- * formats -- so portraits (all SVG) must go through an <img> element instead.
+ * Fits a `size` box into the portrait window, centered, without distorting
+ * its aspect ratio. The one fit-math formula for the portrait window --
+ * drawPortrait() and scoring/markerCoverage.ts's markerCanvasRect() (which
+ * projects a marker into this same rect) both call this instead of each
+ * carrying their own copy.
  */
-function loadImage(blob: Blob): Promise<HTMLImageElement> {
-  const url = URL.createObjectURL(blob);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Portrait image failed to decode'));
-    };
-    img.src = url;
-  });
+export function fitPortraitRect(size: { readonly w: number; readonly h: number }): FittedRect {
+  const scale = Math.min(WINDOW.width / size.w, WINDOW.height / size.h);
+  const w = size.w * scale;
+  const h = size.h * scale;
+  return { x: WINDOW.x + (WINDOW.width - w) / 2, y: WINDOW.y + (WINDOW.height - h) / 2, w, h };
+}
+
+/** Fits the portrait into the window without distorting its aspect ratio. */
+function drawPortrait(ctx: CanvasRenderingContext2D, image: HTMLImageElement): void {
+  const rect = fitPortraitRect({ w: image.naturalWidth, h: image.naturalHeight });
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+}
+
+// Static per-suspect assets -- decoding the same portrait again on every
+// keystroke of the bounty line (or any other unrelated config change) is
+// wasted work. Same cache-by-url pattern as overlays.ts.
+const portraitCache = new Map<string, Promise<HTMLImageElement>>();
+
+function loadPortraitImage(url: string): Promise<HTMLImageElement> {
+  const cached = portraitCache.get(url);
+  if (cached) return cached;
+
+  const promise = fetch(url)
+    .then((res) => res.blob())
+    .then(
+      (blob) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const objectUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(img);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Portrait image failed to decode'));
+          };
+          img.src = objectUrl;
+        }),
+    );
+  promise.catch(() => portraitCache.delete(url));
+  portraitCache.set(url, promise);
+  return promise;
 }
 
 /**

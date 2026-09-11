@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTerminal } from '../state/terminal';
 import { JURISDICTION, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../data/suspects';
 import { MARKERS, type Marker } from '../data/markers';
+import { BulletinThumb } from './BulletinThumb';
 
 /** Ambient background chatter -- static on purpose, not tied to any real event. It exists so the terminal reads as inhabited, not as a log of anything. */
 const DISPATCH_LOG = [
@@ -115,10 +116,7 @@ export function RecordView({ suspect }: { suspect: SuspectId }) {
           ) : (
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
               {priorBulletins.map((b) => (
-                <figure key={b.controlNumber} className="space-y-1">
-                  <img src={b.posterDataUrl} alt="" className="w-full border border-phosphor-dim" />
-                  <figcaption className="text-[9px] text-phosphor-dim">{b.controlNumber}</figcaption>
-                </figure>
+                <BulletinThumb key={b.controlNumber} bulletin={b} caption={b.controlNumber} dense />
               ))}
             </div>
           )}
