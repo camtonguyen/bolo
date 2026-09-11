@@ -3,15 +3,15 @@
 ## What this is
 
 An in-world police terminal built around `@unlayer/react-image-editor`. You're
-an operator in the Leonida State Police Wanted Division: pull a suspect
-record, compose the wanted bulletin, issue it. The editor is the composition
+an operator in the Leonida State Police Wanted Division. Pull a suspect
+record. Compose the wanted bulletin. Issue it. The editor is the composition
 surface, mounted at full panel width.
 
-**The turn:** after three closed cases, a record carrying this terminal's own
-operator ID enters the queue. The same editor is now how you doctor your own
-bulletin. Drop recognition below 40% without pushing tamper above 60% and you
-walk. Reusing a technique makes it more expensive every time (Reyes), and a
-flagged attempt raises the stakes for every attempt after it (Act III).
+**The turn:** after three closed cases, a record enters the queue carrying
+this terminal's own operator ID. Same editor. Now you're using it to doctor
+your own bulletin. Drop recognition below 40% without pushing tamper above
+60% and you walk. Reuse a technique and it costs more every time (Reyes). Get
+flagged once and every attempt after runs under heavier scrutiny (Act III).
 
 ## Stack
 
