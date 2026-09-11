@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useTerminal, useAct } from '../state/terminal';
 import { isSuspectId, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../data/suspects';
 import { composite, type CompositeConfig, type LookId, type OverlayId } from '../canvas/pipeline';
@@ -61,14 +61,17 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Syncs the canvas plate to the current config + suspect portrait.
+  // Syncs the canvas plate to the current config + suspect portrait. Deferred
+  // so fast typing in the bounty line (a config change on every keystroke)
+  // keeps the input itself responsive instead of queuing a full recomposite
+  // -- including a PNG re-encode -- per character.
+  const deferredConfig = useDeferredValue(config);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(SUSPECTS[config.substitutedPortrait ?? suspect].portrait);
-        const blob = await res.blob();
-        const dataUrl = await composite(blob, suspect, config, controlNumber);
+        const portraitUrl = SUSPECTS[deferredConfig.substitutedPortrait ?? suspect].portrait;
+        const dataUrl = await composite(portraitUrl, suspect, deferredConfig, controlNumber);
         if (!cancelled) setPlate(dataUrl);
       } catch {
         if (!cancelled) setError('Portrait scan unavailable.');
@@ -77,7 +80,7 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
     return () => {
       cancelled = true;
     };
-  }, [suspect, config, controlNumber]);
+  }, [suspect, deferredConfig, controlNumber]);
 
   // Toggling adds a placement at the overlay's registry default, or removes
   // it if already on the plate.

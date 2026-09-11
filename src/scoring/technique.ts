@@ -38,3 +38,9 @@ export function incrementSuspicion(suspicion: Suspicion, used: readonly Techniqu
 export function isTechnique(value: unknown): value is Technique {
   return typeof value === 'string' && (TECHNIQUES as readonly string[]).includes(value);
 }
+
+/** Which of the given techniques has the highest prior-use count -- the one Reyes calls out. Null if none were used. */
+export function mostSuspicious(used: readonly Technique[], suspicion: Suspicion): Technique | null {
+  if (used.length === 0) return null;
+  return used.reduce((a, b) => (suspicion[b] > suspicion[a] ? b : a));
+}

@@ -1,4 +1,5 @@
 import { useTerminal, useAct } from '../state/terminal';
+import { actPolicy } from '../state/act';
 
 /** Strip reads warm before Internal Affairs is formally involved. */
 const HEAT_WARN_THRESHOLD = 50;
@@ -25,8 +26,8 @@ export function StatusStrip() {
           <span className="whitespace-nowrap">OP {operator ?? '—'}</span>
           <span className="whitespace-nowrap">CLOSED {casesClosed}</span>
           <span className={`whitespace-nowrap ${heatTone}`}>HEAT {heat}</span>
-          {/* Standing, not heat-triggered like the banner below -- a permanent mark once Act III begins, whatever heat happens to read right now. */}
-          {act === 'III' && <span className="whitespace-nowrap text-alert">IA</span>}
+          {/* Standing, not heat-triggered like the banner below -- see actPolicy's showInternalAffairsBadge. */}
+          {actPolicy(act).showInternalAffairsBadge && <span className="whitespace-nowrap text-alert">IA</span>}
         </div>
       </header>
       {heat >= HEAT_CRITICAL_THRESHOLD && (

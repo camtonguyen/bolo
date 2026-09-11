@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist, type PersistStorage } from 'zustand/middleware';
-import { CASES_BEFORE_REVEAL, OPERATOR_RECORD_ID, type SuspectId } from '../data/suspects';
+import { OPERATOR_RECORD_ID, type SuspectId } from '../data/suspects';
 import type { CompositeConfig } from '../canvas/pipeline';
 import type { Verdict } from '../scoring/recognition';
-import { deriveTechniques, incrementSuspicion, ZERO_SUSPICION, type Suspicion } from '../scoring/technique';
+import { ZERO_SUSPICION, type Suspicion } from '../scoring/technique';
 import { deriveAct, type Act } from './act';
-import { deriveEnding, type Ending } from './ending';
+import type { Ending } from './ending';
+import { resolveIssue } from './issue';
 import type { ControlNumber, OperatorId } from '../lib/brand';
 import { MAX_STORED_BULLETINS, PERSIST_VERSION, parsePersistedState, type PersistedState } from './parse';
 import { playAlertTone, playSquelch } from '../audio/sound';
@@ -173,49 +174,14 @@ export const useTerminal = create<TerminalState>()(
           }
         }),
 
+      // Thin adapter: resolveIssue (state/issue.ts) decides heat, stickiness,
+      // screen routing, and suspicion; this applies the result and runs the
+      // one side effect (audio) that decision implies.
       issue: (bulletin, verdict) => {
-        const isOperatorCase = bulletin.suspect === OPERATOR_RECORD_ID;
-        // Reyes reviews every bulletin, not just the operator's -- the
-        // suspicion she's built up by the operator's own turn comes from
-        // the player's habits across the whole queue.
-        const usedTechniques = deriveTechniques(bulletin.config);
-        set((s) => {
-          const heat = isOperatorCase ? clampHeat(s.heat + verdict.heatDelta) : s.heat;
-          // Sticky: once a run-ending condition is met, it stays met even if
-          // heat later decays back under the threshold that produced it.
-          const ending = s.ending ?? (isOperatorCase ? deriveEnding(verdict, bulletin.config, heat) : null);
-          const framed = bulletin.config.substitutedPortrait;
-
-          // A "complicit" close shows the framed suspect's own record, not
-          // the operator's -- and walking on a substituted portrait always
-          // skips the normal verdict entirely: recognition/tamper bars right
-          // before "someone else was just arrested for this" would read as
-          // a celebration, not a cost.
-          let screen: Screen;
-          if (ending === 'complicit') {
-            // deriveEnding only ever returns 'complicit' when substitutedPortrait is set, so framed is non-null here.
-            screen = framed ? { kind: 'epilogue', framed } : { kind: 'verdict', suspect: bulletin.suspect, verdict };
-          } else if (ending) {
-            screen = { kind: 'ending', ending };
-          } else {
-            screen = { kind: 'verdict', suspect: bulletin.suspect, verdict };
-          }
-
-          return {
-            bulletins: [bulletin, ...s.bulletins],
-            casesClosed: s.casesClosed + 1,
-            heat,
-            suspicion: incrementSuspicion(s.suspicion, usedTechniques),
-            operatorFlagged: s.operatorFlagged || (isOperatorCase && verdict.outcome === 'flagged'),
-            ending,
-            screen,
-          };
-        });
+        const { justRevealed, ...patch } = resolveIssue(get(), bulletin, verdict);
+        set(patch);
         playSquelch();
-        if (!get().revealed && get().casesClosed >= CASES_BEFORE_REVEAL) {
-          set({ revealed: true });
-          playAlertTone();
-        }
+        if (justRevealed) playAlertTone();
       },
 
       decayHeat: () => set((s) => ({ heat: clampHeat(s.heat - HEAT_DECAY_PER_TICK) })),
