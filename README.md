@@ -21,14 +21,51 @@ Live demo: https://bolo-psi.vercel.app
    window) before the editor ever sees it. Choose a plate treatment (raw,
    archival, degraded) and drag the tamper-evidence overlays into place.
 2. **Edit.** The composed plate goes to `@unlayer/react-image-editor` at full
-   width: Filter, Crop, Draw, Text, Shapes, Stickers. Then hit **Issue
-   bulletin**.
+   width: Filter, Crop, Draw, Text, Shapes, Stickers. A live ALTERATION
+   readout tracks what those tools actually do to the plate. Hit **Issue
+   bulletin** in the editor itself, or **TRANSMIT BULLETIN** in the terminal
+   chrome once there's something to send.
 3. **Verdict.** Recognition and tamper bars fill. A dispatch response reads
    back. Every issued bulletin lands on the wanted board.
 
-No image analysis runs anywhere. The verdict is scored from the same plain,
-serializable object the compositor already built: plate treatment, overlays,
-bounty line. Nothing hidden, nothing extra.
+The rail's own controls (plate treatment, overlays, bounty line, substituted
+portrait) score from one plain, serializable object -- no image analysis
+needed there. The SDK editor's own tools (crop, text, stickers) are invisible
+to that object, though, so there's no way to know what they did except by
+looking: a live poll of the editor's own render, diffed against the original
+plate. That's the only pixel comparison anywhere in the game, and it exists
+because the SDK gives no other way to see inside its own tools.
+
+## Game logic
+
+```mermaid
+flowchart TD
+    Queue[Case Queue] --> Record[Suspect Record]
+    Record --> Compose[Compose Bulletin]
+
+    subgraph inEditor [Compose screen]
+        Rail["Rail controls: plate treatment, overlays,<br/>bounty line, substituted portrait"] --> Config[CompositeConfig]
+        SDKTools["SDK editor's own tools:<br/>crop / text / stickers"] --> Poll["getImage() poll, gated on hasChanges()"]
+        Poll --> Delta["computeDelta() vs. the original plate"]
+    end
+
+    Config --> Issue{"Issue bulletin<br/>(SDK save button or TRANSMIT control)"}
+    Delta --> Issue
+    Issue --> Evaluate["evaluate(config, suspect, suspicion, act, liveDelta)"]
+    Evaluate --> Verdict["Verdict: match / tamper / outcome"]
+    Verdict --> Resolve[resolveIssue]
+
+    Resolve --> Suspicion[("suspicion += techniques used<br/>(reuse costs more tamper next time)")]
+    Resolve --> IsOperator{"Operator's own case?"}
+    IsOperator -->|no| Board[Wanted Board] --> Queue
+    IsOperator -->|yes| Heat["heat += heatDelta"] --> Ending["deriveEnding(verdict, config, heat)"]
+
+    Ending -->|"identified / burned / clean / complicit"| EndScreen["Ending / Epilogue screen<br/>(run over)"]
+    Ending -->|"still null: run continues"| VerdictScreen[Verdict screen] --> Queue
+
+    ThreeCases["3 cases closed"] -.-> Turn["Operator's own record<br/>enters the queue"] -.-> Record
+    Act["Act I -> II -> III<br/>(revealed + operatorFlagged)"] -.->|"tamperScrutiny multiplier"| Evaluate
+```
 
 ## The act-two turn
 
