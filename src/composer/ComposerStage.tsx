@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal, useAct } from '../state/terminal';
 import { isSuspectId, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../data/suspects';
 import { composite, type CompositeConfig, type LookId, type OverlayId } from '../canvas/pipeline';
@@ -97,7 +97,14 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   // EditorSession) and claims the DOM slot below for it to render into.
   // Leaving this screen releases the slot but never clears the published
   // session -- the editor keeps showing this case until a new one publishes.
-  const { slotRef, liveDelta } = useComposeSession(plate ? { image: plate, suspect, config, controlNumber, locale } : null);
+  // Memoized so an unrelated re-render (toggling markers, say) doesn't
+  // re-publish an identical session and cascade a render through the
+  // provider and the persistent editor for nothing.
+  const composeSessionData = useMemo(
+    () => (plate ? { image: plate, suspect, config, controlNumber, locale } : null),
+    [plate, suspect, config, controlNumber, locale],
+  );
+  const { slotRef, liveDelta } = useComposeSession(composeSessionData);
 
   // Toggling adds a placement at the overlay's registry default, or removes
   // it if already on the plate.
