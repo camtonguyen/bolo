@@ -50,11 +50,31 @@ Reached through `ref.current?.editor` — `null` until mounted.
 
 | Method | Use in this project |
 | --- | --- |
-| `getImage()` | Thumbnail for the wanted board preview |
-| `hasChanges()` | Guard before abandoning a bulletin |
-| `reset(url?)` | Load the next photo without a remount |
+| `getImage()` | Returns `string \| null` **synchronously** -- a data URL, not a promise or a blob. Polled for the live forensic diff (see `src/canvas/diff.ts`, `EditorPanel`'s poll effect) and for the wanted board thumbnail |
+| `hasChanges()` | Cheap, synchronous. Guards every poll loop and every exit path (abandon, transmit) |
+| `reset(url?)` | Load the next photo without a remount. `void \| Promise<void>` |
 | `updateOptions(p)` | Theme + locale only |
 | `destroy()` | Component handles this on unmount |
+
+## Confirmed from the compiled component (`dist/index.mjs`), not just the `.d.ts`
+
+- Changing the `image` prop does **not** require calling `reset()` yourself --
+  the component diffs `image` against what it last applied and calls
+  `editor.reset(newImage)` internally. So a plate recomposite while the
+  editor is open (a rail edit -- bounty line, overlay toggle -- while
+  `ComposerStage` and `EditorPanel` are both mounted) silently resets the
+  live editor and discards any in-progress crop/text/sticker edit. Anything
+  that reads the editor's live state (the forensic-diff poll) must re-derive
+  its baseline whenever `image` changes, not just once on mount.
+- The remount key is *literally* `JSON.stringify(options minus {theme,
+  locale, translations})` compared across renders in a `useEffect` dependency
+  array -- confirming the SKILL's existing memoization warning is not
+  approximate, it's exact. Any other key, even an equivalent object with a
+  new identity, remounts.
+- `editorId` only sets the mounted `<div id>` -- purely cosmetic, safe to
+  reuse or omit for a single instance. Multiple simultaneous instances still
+  need distinct `editorId`s to avoid two editors fighting over one DOM id,
+  even though the SDK itself doesn't key off of it.
 
 ## Does not exist — hard stop
 
