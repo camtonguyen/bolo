@@ -9,6 +9,7 @@ import { VerdictView } from './VerdictView';
 import { EpilogueView } from './EpilogueView';
 import { EndingView } from './EndingView';
 import { ComposerStage } from '../composer/ComposerStage';
+import { EditorSessionProvider } from '../composer/EditorSession';
 import { WantedBoard } from '../board/WantedBoard';
 import { DispatchPrompt } from './DispatchPrompt';
 import { CRT_MOTION, nextFlickerDelayMs } from './motion';
@@ -109,26 +110,28 @@ export function TerminalShell() {
   useEffect(() => setMuted(muted), [muted]);
 
   return (
-    <div ref={rootRef} className="relative flex h-full w-full flex-col bg-terminal" style={CRT_STYLE}>
-      {/* CRT scanlines + vignette. Part of the in-world look. */}
-      <div aria-hidden className="scanlines pointer-events-none fixed inset-0 z-50 opacity-[0.12]" />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-40"
-        style={{ background: 'radial-gradient(120% 90% at 50% 50%, transparent 55%, #000 100%)' }}
-      />
-      {/* Barrel curvature + chromatic fringe. CSS-only, static — no per-frame paint cost. */}
-      <div aria-hidden className="crt-edge pointer-events-none fixed inset-0 z-45" />
+    <EditorSessionProvider>
+      <div ref={rootRef} className="relative flex h-full w-full flex-col bg-terminal" style={CRT_STYLE}>
+        {/* CRT scanlines + vignette. Part of the in-world look. */}
+        <div aria-hidden className="scanlines pointer-events-none fixed inset-0 z-50 opacity-[0.12]" />
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-40"
+          style={{ background: 'radial-gradient(120% 90% at 50% 50%, transparent 55%, #000 100%)' }}
+        />
+        {/* Barrel curvature + chromatic fringe. CSS-only, static — no per-frame paint cost. */}
+        <div aria-hidden className="crt-edge pointer-events-none fixed inset-0 z-45" />
 
-      {screen.kind !== 'boot' && <StatusStrip />}
+        {screen.kind !== 'boot' && <StatusStrip />}
 
-      {/* min-h-0 overrides the flex default of min-height:auto -- without it, a flex-1 child grows to fit tall content (like RecordView's new columns) instead of being capped to the remaining viewport height, and the child's own overflow-y-auto never engages. */}
-      <main className="relative z-10 min-h-0 flex-1 overflow-hidden">
-        <ScreenRouter />
-      </main>
+        {/* min-h-0 overrides the flex default of min-height:auto -- without it, a flex-1 child grows to fit tall content (like RecordView's new columns) instead of being capped to the remaining viewport height, and the child's own overflow-y-auto never engages. */}
+        <main className="relative z-10 min-h-0 flex-1 overflow-hidden">
+          <ScreenRouter />
+        </main>
 
-      <DispatchPrompt />
-    </div>
+        <DispatchPrompt />
+      </div>
+    </EditorSessionProvider>
   );
 }
 

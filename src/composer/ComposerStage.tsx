@@ -10,7 +10,7 @@ import { isObscured, markerCanvasRect } from '../scoring/markerCoverage';
 import type { Suspicion } from '../scoring/technique';
 import type { Act } from '../state/act';
 import { MARKERS } from '../data/markers';
-import { EditorPanel } from './EditorPanel';
+import { useComposeSession } from './EditorSession';
 import type { DispatchLocale } from '../lib/unlayer';
 
 const LOOKS: readonly { id: LookId; label: string }[] = [
@@ -56,8 +56,6 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   const [controlNumber] = useState(() => generateControlNumber());
   const [locale, setLocale] = useState<DispatchLocale>('en');
   const previewRef = useRef<HTMLDivElement>(null);
-  // Mirrors EditorPanel's live forensic-diff reading for the ALTERATION readout below -- display only, EditorPanel keeps its own copy for scoring at save time.
-  const [liveDelta, setLiveDelta] = useState(0);
   // On for the player's first-ever case (no bulletin issued yet), off after -- by then they've seen the connection once.
   const [showMarkers, setShowMarkers] = useState(() => useTerminal.getState().bulletins.length === 0);
 
@@ -94,6 +92,12 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
       cancelled = true;
     };
   }, [suspect, deferredConfig, controlNumber]);
+
+  // Publishes this case to the one persistent editor instance (see
+  // EditorSession) and claims the DOM slot below for it to render into.
+  // Leaving this screen releases the slot but never clears the published
+  // session -- the editor keeps showing this case until a new one publishes.
+  const { slotRef, liveDelta } = useComposeSession(plate ? { image: plate, suspect, config, controlNumber, locale } : null);
 
   // Toggling adds a placement at the overlay's registry default, or removes
   // it if already on the plate.
@@ -279,15 +283,15 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
             )}
           </aside>
 
-          {/* The editor gets the full remaining width — the whole reason for a terminal. */}
-          <EditorPanel
-            image={plate}
-            suspect={suspect}
-            config={config}
-            controlNumber={controlNumber}
-            locale={locale}
-            onLiveDeltaChange={setLiveDelta}
-          />
+          {/*
+            The editor gets the full remaining width — the whole reason for a
+            terminal. This div doesn't render the editor itself: the actual
+            `<EditorPanel>` is one persistent instance owned by
+            EditorSessionProvider (see EditorSession.tsx) that portals its
+            DOM in here. `contents` drops this div out of the box tree so the
+            portaled content becomes the real grid item in its place.
+          */}
+          <div ref={slotRef} className="contents" />
         </>
       )}
     </div>

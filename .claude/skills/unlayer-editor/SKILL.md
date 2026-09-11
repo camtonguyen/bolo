@@ -76,6 +76,28 @@ Reached through `ref.current?.editor` — `null` until mounted.
   need distinct `editorId`s to avoid two editors fighting over one DOM id,
   even though the SDK itself doesn't key off of it.
 
+## Surviving screen navigation without remounting
+
+`EditorPanel` (and the `<ImageEditor>` inside it) is mounted exactly once for
+the whole app session, by `EditorSessionProvider` in `TerminalShell` --
+*above* the screen router, not inside `ComposerStage`. Screens that come and
+go (`CaseQueue`, `RecordView`, `ComposerStage`) never own the editor's
+lifecycle:
+
+- `ComposerStage` calls `useComposeSession(data)` (see
+  `src/composer/EditorSession.tsx`) to publish its case and to claim a DOM
+  slot for the editor's own markup to render into.
+- The provider portals `<EditorPanel>`'s output into that slot, or into a
+  permanently-mounted offscreen fallback div when no screen currently claims
+  one -- so the SDK's container node is never removed from the document.
+- A new case publishing a new `image` is just another `image` prop change on
+  the one long-lived instance, which the SDK picks up via its own internal
+  reset (see above) -- not a remount.
+
+Don't reach for this pattern for anything that doesn't need to survive a
+screen change. It exists solely because this editor's mount/decode cost and
+in-progress edits are worth preserving across navigation.
+
 ## Does not exist — hard stop
 
 Custom stickers · custom fonts · `options.colors` · custom filter presets ·
