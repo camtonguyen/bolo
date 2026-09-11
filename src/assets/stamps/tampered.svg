@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200">
+  <g transform="rotate(-14 300 100)" opacity="0.9">
+    <rect x="40" y="55" width="520" height="90" rx="6" fill="none" stroke="#9c1c14" stroke-width="7"/>
+    <rect x="52" y="67" width="496" height="66" rx="4" fill="none" stroke="#9c1c14" stroke-width="3" opacity="0.8"/>
+    <text x="300" y="118" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700"
+          font-size="56" letter-spacing="6" fill="#9c1c14">TAMPERED</text>
+  </g>
+</svg>

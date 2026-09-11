@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Rejects agent attribution in commit messages.
+if grep -qiE '^(Co-Authored-By:.*(Claude|Anthropic)|.*Generated with.*Claude)' "$1"; then
+  echo "error: agent attribution is not permitted in commit messages" >&2
+  exit 1
+fi

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <g transform="rotate(-8 150 150)" fill="none" stroke="#8a2e1f" stroke-width="6" opacity="0.85">
+    <circle cx="150" cy="150" r="120" stroke-dasharray="14 7"/>
+    <circle cx="150" cy="150" r="98"/>
+    <path d="M150 90 L163 132 L207 132 L172 157 L185 199 L150 174 L115 199 L128 157 L93 132 L137 132 Z" fill="#8a2e1f" stroke="none"/>
+  </g>
+</svg>
