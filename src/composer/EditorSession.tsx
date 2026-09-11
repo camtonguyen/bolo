@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { EditorPanel } from './EditorPanel';
 import type { CompositeConfig } from '../canvas/pipeline';
@@ -38,14 +38,15 @@ const EditorSessionContext = createContext<EditorSessionContextValue | null>(nul
  */
 export function EditorSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<ComposeSessionData | null>(null);
-  const [slot, setSlotState] = useState<HTMLDivElement | null>(null);
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const [liveDelta, setLiveDelta] = useState(0);
   const [fallback, setFallback] = useState<HTMLDivElement | null>(null);
 
-  const publish = useCallback((data: ComposeSessionData) => setSession(data), []);
-  const setSlot = useCallback((node: HTMLDivElement | null) => setSlotState(node), []);
-
-  const value = useMemo<EditorSessionContextValue>(() => ({ publish, setSlot, liveDelta }), [publish, setSlot, liveDelta]);
+  // setSession/setSlot are useState setters -- already stable, no need to wrap them.
+  const value = useMemo<EditorSessionContextValue>(
+    () => ({ publish: setSession, setSlot, liveDelta }),
+    [setSlot, liveDelta],
+  );
 
   const portalTarget = slot ?? fallback;
 

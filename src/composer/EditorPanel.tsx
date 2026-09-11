@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageEditor from '@unlayer/react-image-editor';
 import { useTerminal, useAct } from '../state/terminal';
 import { evaluate } from '../scoring/recognition';
@@ -18,10 +18,10 @@ interface Props {
   onLiveDeltaChange?: (delta: number) => void;
 }
 
-/** How often the live poll checks hasChanges() and, if true, re-diffs the editor's own render against the reference bitmap. */
-const DELTA_POLL_INTERVAL_MS = 1500;
-/** hasChanges() alone is a cheap, synchronous call with no image decode, so the TRANSMIT gate can afford to poll it more often than the delta diff. */
+/** hasChanges() alone is cheap and synchronous, no image decode, so the shared poll loop below runs at this cadence. */
 const HAS_CHANGES_POLL_INTERVAL_MS = 500;
+/** The getImage()+decode+diff step is heavier, so it only runs on every Nth tick of the loop above -- roughly every 1500ms. */
+const DELTA_POLL_TICKS = 3;
 
 /** Decodes a data URL to a DIFF_SIZE x DIFF_SIZE ImageData -- decode and downsample happen together via one scaled drawImage, cheap enough to run on every poll tick. */
 function decodeToDeltaBitmap(dataUrl: string): Promise<ImageData> {
@@ -82,17 +82,17 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
   const liveDeltaRef = useRef(0);
   const referenceBitmapRef = useRef<ImageData | null>(null);
   const pollBusyRef = useRef(false);
-  // Latest-ref so the two effects below can report a delta without taking a
-  // fresh-every-render callback identity as a dependency.
-  const onLiveDeltaChangeRef = useRef(onLiveDeltaChange);
-  useEffect(() => {
-    onLiveDeltaChangeRef.current = onLiveDeltaChange;
-  });
 
-  const reportLiveDelta = (delta: number) => {
-    liveDeltaRef.current = delta;
-    onLiveDeltaChangeRef.current?.(delta);
-  };
+  // onLiveDeltaChange is always the EditorSessionProvider's useState setter
+  // in practice, which React guarantees is stable -- so it's safe to close
+  // over directly and list as a dependency below, no ref-mirroring needed.
+  const reportLiveDelta = useCallback(
+    (delta: number) => {
+      liveDeltaRef.current = delta;
+      onLiveDeltaChange?.(delta);
+    },
+    [onLiveDeltaChange],
+  );
 
   // Recaptures the forensic reference bitmap whenever `image` changes -- a
   // rail edit (bounty line, overlay toggle) recomposites the plate, which
@@ -113,22 +113,27 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
     return () => {
       cancelled = true;
     };
-  }, [image]);
+  }, [image, reportLiveDelta]);
 
-  // Polls the live editor render to detect in-editor changes the SDK
-  // otherwise hides from CompositeConfig -- getImage() is the only window
-  // into whatever the player did with the editor's own crop/text/sticker
-  // tools. Gated on hasChanges() so an untouched editor never pays for a
-  // decode, and skips a tick outright (rather than queuing) if the previous
-  // one hasn't finished.
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // One poll loop for both concerns. hasChanges() is cheap and drives the
+  // external TRANSMIT control every tick; getImage()+decode+diff -- the only
+  // window into what the player did with the editor's own crop/text/sticker
+  // tools -- only runs every DELTA_POLL_TICKS ticks, and skips a tick
+  // outright (rather than queuing) if the previous decode hasn't finished.
   useEffect(() => {
+    let tick = 0;
     const id = setInterval(() => {
-      if (pollBusyRef.current) return;
       const editor = ref.current?.editor;
+      const changed = editor?.hasChanges() ?? false;
+      setHasChanges(changed);
+
+      tick += 1;
+      if (tick % DELTA_POLL_TICKS !== 0 || pollBusyRef.current || !changed) return;
       const reference = referenceBitmapRef.current;
-      if (!editor?.hasChanges() || !reference) return;
-      const dataUrl = editor.getImage();
-      if (!dataUrl) return;
+      const dataUrl = editor?.getImage();
+      if (!reference || !dataUrl) return;
       pollBusyRef.current = true;
       decodeToDeltaBitmap(dataUrl)
         .then((candidate) => {
@@ -138,21 +143,9 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
         .finally(() => {
           pollBusyRef.current = false;
         });
-    }, DELTA_POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  const [hasChanges, setHasChanges] = useState(false);
-
-  // Polls hasChanges() to gate the external TRANSMIT control in our own
-  // chrome -- the only way to know the SDK's internal save button would
-  // currently have anything to save, since the SDK exposes no change event.
-  useEffect(() => {
-    const id = setInterval(() => {
-      setHasChanges(ref.current?.editor?.hasChanges() ?? false);
     }, HAS_CHANGES_POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [reportLiveDelta]);
 
   // Shared by both save paths -- the editor's own internal save button (via
   // onSave) and the external TRANSMIT control (via getImage()) -- so they
