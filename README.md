@@ -42,6 +42,8 @@ because the SDK gives no other way to see inside its own tools.
 flowchart TD
     Queue[Case Queue] --> Record[Suspect Record]
     Record --> Compose[Compose Bulletin]
+    Compose --> Rail
+    Compose --> SDKTools
 
     subgraph inEditor [Compose screen]
         Rail["Rail controls: plate treatment, overlays,<br/>bounty line, substituted portrait"] --> Config[CompositeConfig]
@@ -55,13 +57,13 @@ flowchart TD
     Evaluate --> Verdict["Verdict: match / tamper / outcome"]
     Verdict --> Resolve[resolveIssue]
 
+    Resolve --> Board[("Bulletin filed --<br/>viewable anytime on the BOARD tab")]
     Resolve --> Suspicion[("suspicion += techniques used<br/>(reuse costs more tamper next time)")]
-    Resolve --> IsOperator{"Operator's own case?"}
-    IsOperator -->|no| Board[Wanted Board] --> Queue
-    IsOperator -->|yes| Heat["heat += heatDelta"] --> Ending["deriveEnding(verdict, config, heat)"]
+    Resolve -.->|"operator case only"| Heat["heat += heatDelta"] -.-> Ending
+    Resolve --> Ending{"Ending applies?<br/>(operator case derives one from verdict + heat;<br/>once any ending is set, it's sticky for every case after)"}
 
-    Ending -->|"identified / burned / clean / complicit"| EndScreen["Ending / Epilogue screen<br/>(run over)"]
-    Ending -->|"still null: run continues"| VerdictScreen[Verdict screen] --> Queue
+    Ending -->|"identified / burned / clean / complicit"| EndScreen["Ending / Epilogue screen<br/>(run over)"] --> Queue
+    Ending -->|"still null"| VerdictScreen[Verdict screen] --> Queue
 
     ThreeCases["3 cases closed"] -.-> Turn["Operator's own record<br/>enters the queue"] -.-> Record
     Act["Act I -> II -> III<br/>(revealed + operatorFlagged)"] -.->|"tamperScrutiny multiplier"| Evaluate
