@@ -1,11 +1,16 @@
 # BOLO
 
+Built for Unlayer's Build with React Image Editor Challenge: an original GTA
+VI-inspired experience.
+
 BOLO is a police terminal for the Leonida State Police, Wanted Division. You
 work the queue: pull a suspect's record, drop the intake photo into a
 full-panel React Image Editor, grade the scan, stamp the plate, push the
 bulletin out to the field.
 
 It plays like paperwork. It doesn't stay that way.
+
+Live demo: https://bolo-psi.vercel.app
 
 ![BOLO demo](public/Bolo-Demo.gif)
 
