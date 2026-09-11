@@ -40,7 +40,17 @@ const TAMPER = {
   GRADE_MAX: 35,
   /** Tamper per unit of an overlay's own canvas-normalized area. High: the widest stamp (~0.07 area) lands near 50 alone. */
   OVERLAY_AREA_SCALE: 700,
+  /**
+   * Tamper at full (1.0) liveDelta. Weighted above the widest single overlay
+   * on its own -- liveDelta is the only visibility into whatever the player
+   * did with the SDK's own crop/text/sticker tools, so it has to dominate
+   * rather than sit alongside config-derived terms as an equal.
+   */
+  LIVE_DELTA_MAX: 55,
 } as const;
+
+/** Fraction of match that full (1.0) liveDelta can wipe out -- in-editor edits obscure identity the same way an obscuring overlay does, just invisibly to CompositeConfig. */
+const LIVE_DELTA_MATCH_SCALE = 0.6;
 
 const overlayTamper = (config: CompositeConfig): number =>
   config.overlays.reduce((sum, placement) => {
@@ -57,18 +67,27 @@ const overlayTamper = (config: CompositeConfig): number =>
 const SUSPICION_WEIGHT = 0.12;
 const suspicionMultiplier = (priorUses: number): number => 1 + priorUses * SUSPICION_WEIGHT;
 
-export function evaluate(config: CompositeConfig, suspect: SuspectId, suspicion: Suspicion, act: Act): Verdict {
+/**
+ * liveDelta is the 0-1 forensic-diff signal from EditorPanel's poll of the
+ * SDK's own getImage() -- see src/canvas/diff.ts. It's the only visibility
+ * into what the player did with the editor's own crop/text/sticker tools, so
+ * it's threaded through as its own parameter rather than folded into
+ * CompositeConfig, which the editor's internal tools never touch.
+ */
+export function evaluate(config: CompositeConfig, suspect: SuspectId, suspicion: Suspicion, act: Act, liveDelta: number): Verdict {
   const grade = gradeIntensity(config);
 
   // A substituted portrait carries none of this suspect's markers at all --
   // there's nothing to obscure, coverage doesn't apply. Tamper stays
-  // whatever grade/overlays the player also stacked on; substitution itself
-  // costs nothing there, since the photo is a genuine one.
-  const match = config.substitutedPortrait ? 0 : clamp(coverageMatch(suspect, config, grade));
+  // whatever grade/overlays/in-editor edits the player also stacked on;
+  // substitution itself costs nothing there, since the photo is a genuine one.
+  const configMatch = config.substitutedPortrait ? 0 : coverageMatch(suspect, config, grade);
+  const match = clamp(configMatch * (1 - liveDelta * LIVE_DELTA_MATCH_SCALE));
   const gradeTamper = grade * TAMPER.GRADE_MAX * suspicionMultiplier(suspicion.grade);
   const overlayTamperTotal = overlayTamper(config) * suspicionMultiplier(suspicion.overlay);
+  const liveDeltaTamper = liveDelta * TAMPER.LIVE_DELTA_MAX;
   // Act III: Internal Affairs is watching, on top of whatever Reyes already suspects. Flat, on the whole tamper total, not per-technique.
-  const tamper = clamp((gradeTamper + overlayTamperTotal) * actPolicy(act).tamperScrutiny);
+  const tamper = clamp((gradeTamper + overlayTamperTotal + liveDeltaTamper) * actPolicy(act).tamperScrutiny);
 
   if (tamper >= TAMPER_THRESHOLD) {
     return { match, tamper, outcome: 'flagged', heatDelta: 25 };

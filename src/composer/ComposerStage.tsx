@@ -45,6 +45,8 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   // carried onto the issued bulletin, so both must agree on the same value.
   const [controlNumber] = useState(() => generateControlNumber());
   const previewRef = useRef<HTMLDivElement>(null);
+  // Mirrors EditorPanel's live forensic-diff reading for the ALTERATION readout below -- display only, EditorPanel keeps its own copy for scoring at save time.
+  const [liveDelta, setLiveDelta] = useState(0);
   // On for the player's first-ever case (no bulletin issued yet), off after -- by then they've seen the connection once.
   const [showMarkers, setShowMarkers] = useState(() => useTerminal.getState().bulletins.length === 0);
 
@@ -241,11 +243,24 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               />
             </label>
 
-            {import.meta.env.DEV && <DevScorePanel config={config} suspect={suspect} suspicion={suspicion} act={act} />}
+            {/* Terminal-styled readout, not a progress bar -- the payoff for Part 1: proof that the SDK's own crop/text/sticker tools do something, updating live as the player uses them. */}
+            <p className="font-mono text-[11px] tracking-wider text-phosphor-dim">
+              ALTERATION: <span className="text-amber">{Math.round(liveDelta * 100)}%</span>
+            </p>
+
+            {import.meta.env.DEV && (
+              <DevScorePanel config={config} suspect={suspect} suspicion={suspicion} act={act} liveDelta={liveDelta} />
+            )}
           </aside>
 
           {/* The editor gets the full remaining width — the whole reason for a terminal. */}
-          <EditorPanel image={plate} suspect={suspect} config={config} controlNumber={controlNumber} />
+          <EditorPanel
+            image={plate}
+            suspect={suspect}
+            config={config}
+            controlNumber={controlNumber}
+            onLiveDeltaChange={setLiveDelta}
+          />
         </>
       )}
     </div>
@@ -314,13 +329,15 @@ function DevScorePanel({
   suspect,
   suspicion,
   act,
+  liveDelta,
 }: {
   config: CompositeConfig;
   suspect: SuspectId;
   suspicion: Suspicion;
   act: Act;
+  liveDelta: number;
 }) {
-  const v = evaluate(config, suspect, suspicion, act);
+  const v = evaluate(config, suspect, suspicion, act, liveDelta);
   const tone =
     v.outcome === 'clean' ? 'text-phosphor' : v.outcome === 'flagged' ? 'text-alert' : 'text-amber';
   return (
