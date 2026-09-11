@@ -28,7 +28,6 @@ const ref = useRef<{ editor: ImageEditorInstance | null }>(null);
     },
     features: {
       imageEditor: {
-        dock: 'left',
         tools: {
           resize: false,
           frame: false,
@@ -43,6 +42,19 @@ const ref = useRef<{ editor: ImageEditorInstance | null }>(null);
   onError={(err) => reportEditorFailure(err)}
 />
 ```
+
+## `features.imageEditor.tools` -- the real key list
+
+Verified from `@unlayer/types`' `Features` interface (`imageEditor.tools`),
+not guessed: `crop`, `resize`, `filter`, `draw`, `text`, `shapes`, `stickers`,
+`frame`. Each accepts `boolean | { enabled?: boolean; icon?: string }`. No
+other tool keys exist -- in particular, **`dock` is not one of them**. An
+earlier version of this example had `dock: 'left'` nested under
+`features.imageEditor`; that key doesn't exist there. The real `dock` lives
+at `options.appearance.panels.tools.dock`, which is outside the
+`EditorOptions` subset this project actually passes (`theme`, `locale`,
+`translations`, `features`) -- so it's simply not reachable from our mount
+today, not a feature we're using.
 
 ## Instance methods
 
@@ -75,6 +87,30 @@ Reached through `ref.current?.editor` — `null` until mounted.
   reuse or omit for a single instance. Multiple simultaneous instances still
   need distinct `editorId`s to avoid two editors fighting over one DOM id,
   even though the SDK itself doesn't key off of it.
+
+## Two simultaneous instances (the twin-instance reference bench)
+
+`ComposerStage` mounts two independent `<ImageEditor>`s at once: the
+persistent working editor (`editorId="working"`, see below) and a locked
+`ReferencePlate` (`editorId="reference"`) showing the untouched source
+portrait with every `features.imageEditor.tools` entry disabled. Confirmed
+from the compiled component: `editorId` only sets the mounted `<div id>` and
+each instance tracks its own `editor`/`chainRef`/applied-options state
+independently, so two instances are two entirely separate closures over
+`ImageEditorInner` -- there is no shared module-level editor state to
+collide on beyond the one embed script loader (`loadScript`), which is
+explicitly designed to be shared and cached by `scriptUrl` (`window.ImageEditor`
+installed once, both `createEditor()` calls reuse it). Each instance still
+needs its own `ref` and its own memoized `options` object -- sharing either
+is undefined behaviour, not just untidy code.
+
+**Unverified in this environment:** this reasoning comes from reading
+`dist/index.mjs`, not from an actual browser session against the real
+`cdn.unlayer.com` embed script (no browser tooling here to drive one). Confirm
+both instances actually render and behave independently in a live browser
+before trusting this section further; if they fight over something the
+compiled source doesn't reveal, that's exactly the "cut it" case the
+showcase-update plan calls out this pattern for.
 
 ## Surviving screen navigation without remounting
 

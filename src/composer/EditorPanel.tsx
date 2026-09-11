@@ -213,6 +213,7 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
       </div>
       <ImageEditor
         ref={ref}
+        editorId="working"
         image={image}
         minHeight={minHeight}
         style={{ height: '100%' }}

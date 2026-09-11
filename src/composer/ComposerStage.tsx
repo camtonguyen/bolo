@@ -11,6 +11,7 @@ import type { Suspicion } from '../scoring/technique';
 import type { Act } from '../state/act';
 import { MARKERS } from '../data/markers';
 import { useComposeSession } from './EditorSession';
+import { ReferencePlate } from './ReferencePlate';
 import type { DispatchLocale } from '../lib/unlayer';
 
 const LOOKS: readonly { id: LookId; label: string }[] = [
@@ -118,8 +119,12 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   // loading/error/loaded states -- it's the focus target set on screen
   // change, and swapping it out from under that focus would drop it back to
   // document.body once the loading placeholder it replaced unmounts.
+  // The reference bench (Part 2) only fits at lg -- a third fixed-width
+  // column added there, with no equivalent row inserted below `lg` since the
+  // reference viewer stays hidden (not just visually, `display:none` drops
+  // it out of the grid too) on narrower layouts.
   const containerClass =
-    plate && !error ? 'grid h-full grid-rows-[auto_1fr] lg:grid-rows-1 lg:grid-cols-[220px_1fr]' : 'p-8';
+    plate && !error ? 'grid h-full grid-rows-[auto_1fr] lg:grid-rows-1 lg:grid-cols-[220px_260px_1fr]' : 'p-8';
 
   return (
     <div className={containerClass}>
@@ -282,6 +287,11 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               <DevScorePanel config={config} suspect={suspect} suspicion={suspicion} act={act} liveDelta={liveDelta} />
             )}
           </aside>
+
+          {/* Locked "intake scan" -- the suspect's untouched source portrait, for comparison against whatever's being done to the plate. Desktop only, a third panel doesn't fit beside the rail on a phone. */}
+          <div className="hidden h-full overflow-hidden border-r border-phosphor-dim/40 bg-panel lg:block">
+            <ReferencePlate image={SUSPECTS[suspect].portrait} />
+          </div>
 
           {/*
             The editor gets the full remaining width — the whole reason for a
