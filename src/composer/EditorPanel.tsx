@@ -64,10 +64,9 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
   );
 
   const [hasChanges, setHasChanges] = useState(false);
-  const watch = useMemo(
-    () => createEditorWatch({ onHasChanges: setHasChanges, onDelta: reportLiveDelta }),
-    [reportLiveDelta],
-  );
+  // useState, not useMemo: the watch holds a baseline and in-flight state, so
+  // it must never be silently recreated.
+  const [watch] = useState(() => createEditorWatch({ onHasChanges: setHasChanges, onDelta: reportLiveDelta }));
 
   // Re-baselines whenever `image` changes -- a rail edit (bounty line,
   // overlay toggle) recomposites the plate, which react-image-editor picks up

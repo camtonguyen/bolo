@@ -189,9 +189,9 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               </div>
               {config.overlays.length > 0 && <p className="text-[10px] text-phosphor-dim">Drag to reposition.</p>}
               <div ref={previewRef} className="relative w-full touch-none select-none border border-phosphor-dim">
-                <img src={plate} alt="" className="block w-full" draggable={false} />
+                <img src={plate.image} alt="" className="block w-full" draggable={false} />
                 {showMarkers &&
-                  readCoverage(suspect, config).markers.map(({ marker, rect, obscured }) => (
+                  readCoverage(suspect, plate.config).markers.map(({ marker, rect, obscured }) => (
                     <div
                       key={marker.id}
                       aria-hidden
@@ -243,7 +243,7 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
             </p>
 
             {import.meta.env.DEV && (
-              <DevScorePanel config={config} suspect={suspect} liveDelta={liveDelta} />
+              <DevScorePanel config={plate.config} suspect={suspect} liveDelta={liveDelta} />
             )}
           </aside>
 

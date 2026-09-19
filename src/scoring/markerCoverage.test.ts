@@ -39,6 +39,13 @@ assertEqual(readCoverage('DR-0001', config({ look: 'degraded' })).match, 100, "d
   );
 }
 
+// A substituted portrait carries none of this suspect's markers: the readout says so, so the overlay can't draw them as live.
+{
+  const { markers, match } = readCoverage('DR-0001', config({ substitutedPortrait: 'DR-4417' }));
+  assertEqual(match, 0, 'nothing of the original suspect is left to recognise');
+  assertTruthy(markers.every((m) => m.obscured), 'every marker reads as obscured, matching the score');
+}
+
 // Tamper is priced by footprint: the widest stamp is ~0.074 of the plate (0.55 wide, 3:1, on a 1000x1360 plate).
 assertEqual(overlayFootprint(config()), 0, 'no overlays, no footprint');
 {

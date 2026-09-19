@@ -14,6 +14,9 @@ export interface ComposeSessionData {
   readonly locale: DispatchLocale;
 }
 
+/** A finished composite and every input it was rendered from. */
+export type Plate = Omit<ComposeSessionData, 'locale'>;
+
 interface EditorSessionContextValue {
   readonly publish: (data: ComposeSessionData) => void;
   readonly setSlot: (node: HTMLDivElement | null) => void;
@@ -83,7 +86,9 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
  * onto it are one record, set together when a composite finishes. What the
  * editor holds and what the issued bulletin claims (and is scored on) can't
  * disagree, even while the rail is ahead of an in-flight recomposite.
- * `plate` is the finished image for ComposerStage's own preview.
+ * `plate` is that record for ComposerStage's own preview: draw markers and
+ * read scores off `plate.config`, not the rail's live config, so the HUD
+ * matches the image on screen and what an issued bulletin will be scored on.
  */
 export function useComposeSession({
   suspect,
@@ -93,7 +98,7 @@ export function useComposeSession({
   suspect: SuspectId;
   config: CompositeConfig;
   locale: DispatchLocale;
-}): { plate: string | null; error: string | null; slotRef: (node: HTMLDivElement | null) => void; liveDelta: number } {
+}): { plate: Plate | null; error: string | null; slotRef: (node: HTMLDivElement | null) => void; liveDelta: number } {
   const ctx = useContext(EditorSessionContext);
   if (!ctx) throw new Error('useComposeSession must be used within an EditorSessionProvider');
   const { publish, setSlot, liveDelta } = ctx;
@@ -101,7 +106,7 @@ export function useComposeSession({
   // One control number per composition session -- stamped onto every plate
   // and carried onto the issued bulletin.
   const [controlNumber] = useState(() => generateControlNumber());
-  const [plate, setPlate] = useState<Omit<ComposeSessionData, 'locale'> | null>(null);
+  const [plate, setPlate] = useState<Plate | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Syncs the canvas plate to the config + suspect portrait. Deferred so fast
@@ -115,7 +120,9 @@ export function useComposeSession({
       try {
         const portraitUrl = SUSPECTS[deferredConfig.substitutedPortrait ?? suspect].portrait;
         const image = await composite(portraitUrl, suspect, deferredConfig, controlNumber);
-        if (!cancelled) setPlate({ image, suspect, config: deferredConfig, controlNumber });
+        if (cancelled) return;
+        setPlate({ image, suspect, config: deferredConfig, controlNumber });
+        setError(null);
       } catch {
         if (!cancelled) setError('Portrait scan unavailable.');
       }
@@ -135,5 +142,5 @@ export function useComposeSession({
 
   useEffect(() => () => setSlot(null), [setSlot]);
 
-  return { plate: plate?.image ?? null, error, slotRef: setSlot, liveDelta };
+  return { plate, error, slotRef: setSlot, liveDelta };
 }

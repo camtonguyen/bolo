@@ -74,7 +74,7 @@ export interface MarkerReading {
 
 export interface Coverage {
   readonly markers: readonly MarkerReading[];
-  /** Sum of weights for markers NOT sufficiently obscured -- the coverage-based replacement for the old blunt match weights. Doesn't know about portrait substitution; evaluate() zeroes it. */
+  /** Sum of weights for markers NOT sufficiently obscured -- the coverage-based replacement for the old blunt match weights. */
   readonly match: number;
 }
 
@@ -85,9 +85,12 @@ export interface Coverage {
  */
 export function readCoverage(suspect: SuspectId, config: CompositeConfig): Coverage {
   const gradeIntensity = LOOKS[config.look].intensity;
+  // A substituted portrait carries none of this suspect's markers at all --
+  // there's nothing left to recognise, so every one reads as obscured.
+  const substituted = config.substitutedPortrait !== null;
   const markers = MARKERS[suspect].map((marker) => {
     const rect = markerCanvasRect(suspect, marker.region);
-    return { marker, rect, obscured: isObscured(rect, config, gradeIntensity) };
+    return { marker, rect, obscured: substituted || isObscured(rect, config, gradeIntensity) };
   });
   const match = markers.reduce((sum, m) => (m.obscured ? sum : sum + m.marker.weight), 0);
   return { markers, match };
