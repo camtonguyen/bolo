@@ -2,12 +2,10 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal, useAct } from '../state/terminal';
 import { isSuspectId, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../data/suspects';
 import { composite, type CompositeConfig, type LookId, type OverlayId } from '../canvas/pipeline';
-import { LOOKS as LOOK_REGISTRY } from '../canvas/looks';
 import { STAMPS } from '../assets/stamps';
 import { generateControlNumber } from '../lib/brand';
 import { evaluate } from '../scoring/recognition';
-import { isObscured, markerCanvasRect } from '../scoring/markerCoverage';
-import { MARKERS } from '../data/markers';
+import { readCoverage } from '../scoring/markerCoverage';
 import { useComposeSession } from './EditorSession';
 import type { DispatchLocale } from '../lib/unlayer';
 
@@ -226,25 +224,21 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               <div ref={previewRef} className="relative w-full touch-none select-none border border-phosphor-dim">
                 <img src={plate} alt="" className="block w-full" draggable={false} />
                 {showMarkers &&
-                  MARKERS[suspect].map((marker) => {
-                    const rect = markerCanvasRect(suspect, marker.region);
-                    const obscured = isObscured(suspect, marker, config, LOOK_REGISTRY[config.look].intensity);
-                    return (
-                      <div
-                        key={marker.id}
-                        aria-hidden
-                        className={`pointer-events-none absolute border-2 ${
-                          obscured ? 'border-dashed border-phosphor-dim' : 'border-alert'
-                        }`}
-                        style={{
-                          left: `${rect.x * 100}%`,
-                          top: `${rect.y * 100}%`,
-                          width: `${rect.w * 100}%`,
-                          height: `${rect.h * 100}%`,
-                        }}
-                      />
-                    );
-                  })}
+                  readCoverage(suspect, config).markers.map(({ marker, rect, obscured }) => (
+                    <div
+                      key={marker.id}
+                      aria-hidden
+                      className={`pointer-events-none absolute border-2 ${
+                        obscured ? 'border-dashed border-phosphor-dim' : 'border-alert'
+                      }`}
+                      style={{
+                        left: `${rect.x * 100}%`,
+                        top: `${rect.y * 100}%`,
+                        width: `${rect.w * 100}%`,
+                        height: `${rect.h * 100}%`,
+                      }}
+                    />
+                  ))}
                 {config.overlays.map((o) => (
                   <OverlayHandle key={o.id} id={o.id} x={o.x} y={o.y} containerRef={previewRef} onDrop={moveOverlay} />
                 ))}
