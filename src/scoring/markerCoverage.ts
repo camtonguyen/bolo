@@ -2,6 +2,7 @@ import { SUSPECTS, type SuspectId } from '../data/suspects';
 import { MARKERS, type Marker } from '../data/markers';
 import { overlayRect, type Rect, type OverlayPlacement } from '../canvas/overlays';
 import { PLATE_WIDTH, PLATE_HEIGHT, fitPortraitRect, type CompositeConfig } from '../canvas/pipeline';
+import { LOOKS } from '../canvas/looks';
 
 /**
  * Marker regions are normalized against each portrait's own raw pixel
@@ -10,8 +11,7 @@ import { PLATE_WIDTH, PLATE_HEIGHT, fitPortraitRect, type CompositeConfig } from
  * marker into that same canvas-normalized space, calling pipeline.ts's own
  * fitPortraitRect() so the two never drift apart.
  */
-/** Exported so the composer's marker overlay (Part 5.2) can position boxes in the same space, not just score them. */
-export function markerCanvasRect(suspect: SuspectId, region: Rect): Rect {
+function markerCanvasRect(suspect: SuspectId, region: Rect): Rect {
   const rendered = fitPortraitRect(SUSPECTS[suspect].portraitSize);
 
   return {
@@ -22,13 +22,8 @@ export function markerCanvasRect(suspect: SuspectId, region: Rect): Rect {
   };
 }
 
-/**
- * Same sizing math as canvas/overlays.ts's drawOverlay, via its shared
- * overlayRect(). Exported so recognition.ts can price tamper by how much of
- * the plate an overlay actually covers, instead of a flat per-instance cost
- * that would make picking the biggest stamp strictly dominant.
- */
-export function overlayCanvasRect(placement: OverlayPlacement): Rect {
+/** Same sizing math as canvas/overlays.ts's drawOverlay, via its shared overlayRect(). */
+function overlayCanvasRect(placement: OverlayPlacement): Rect {
   return overlayRect(placement, PLATE_WIDTH / PLATE_HEIGHT);
 }
 
@@ -58,8 +53,7 @@ const GRADE_SMALL_REGION_AREA = 0.006;
  * way to read a crop rect back out of the editor, only the final flattened
  * image, so there is nothing to project here.
  */
-export function isObscured(suspect: SuspectId, marker: Marker, config: CompositeConfig, gradeIntensity: number): boolean {
-  const canvasRect = markerCanvasRect(suspect, marker.region);
+function isObscured(canvasRect: Rect, config: CompositeConfig, gradeIntensity: number): boolean {
   const markerArea = canvasRect.w * canvasRect.h;
   if (markerArea <= 0) return false;
 
@@ -71,10 +65,45 @@ export function isObscured(suspect: SuspectId, marker: Marker, config: Composite
   return gradeIntensity >= 1 && markerArea < GRADE_SMALL_REGION_AREA;
 }
 
-/** Sum of weights for markers NOT sufficiently obscured -- the coverage-based replacement for the old blunt match weights. */
-export function coverageMatch(suspect: SuspectId, config: CompositeConfig, gradeIntensity: number): number {
-  return MARKERS[suspect].reduce(
-    (match, marker) => (isObscured(suspect, marker, config, gradeIntensity) ? match : match + marker.weight),
-    0,
-  );
+export interface MarkerReading {
+  readonly marker: Marker;
+  /** Canvas-normalized, the same space overlays use -- where the composer's marker overlay draws it. */
+  readonly rect: Rect;
+  readonly obscured: boolean;
+}
+
+export interface Coverage {
+  readonly markers: readonly MarkerReading[];
+  /** Sum of weights for markers NOT sufficiently obscured -- the coverage-based replacement for the old blunt match weights. */
+  readonly match: number;
+}
+
+/**
+ * The one readout of what a config hides: the score (evaluate) and the
+ * composer's marker overlay both read it, so what the player sees drawn
+ * as obscured is exactly what was scored as obscured.
+ */
+export function readCoverage(suspect: SuspectId, config: CompositeConfig): Coverage {
+  const gradeIntensity = LOOKS[config.look].intensity;
+  // A substituted portrait carries none of this suspect's markers at all --
+  // there's nothing left to recognise, so every one reads as obscured.
+  const substituted = config.substitutedPortrait !== null;
+  const markers = MARKERS[suspect].map((marker) => {
+    const rect = markerCanvasRect(suspect, marker.region);
+    return { marker, rect, obscured: substituted || isObscured(rect, config, gradeIntensity) };
+  });
+  const match = markers.reduce((sum, m) => (m.obscured ? sum : sum + m.marker.weight), 0);
+  return { markers, match };
+}
+
+/**
+ * Total plate area the config's overlays cover, in canvas-normalized units.
+ * recognition.ts prices tamper by this instead of a flat per-instance cost,
+ * which would make picking the biggest stamp strictly dominant.
+ */
+export function overlayFootprint(config: CompositeConfig): number {
+  return config.overlays.reduce((sum, placement) => {
+    const rect = overlayCanvasRect(placement);
+    return sum + rect.w * rect.h;
+  }, 0);
 }

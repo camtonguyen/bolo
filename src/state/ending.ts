@@ -1,6 +1,9 @@
 import type { Verdict } from '../scoring/recognition';
 import type { CompositeConfig } from '../canvas/pipeline';
 
+/** Heat at which the terminal reads warm -- and the ceiling a run must stay under to end clean. One number, so the status strip and the ending can't disagree. */
+export const HEAT_WARM_THRESHOLD = 50;
+
 export type Ending = 'clean' | 'complicit' | 'burned' | 'identified';
 
 /**
@@ -18,5 +21,5 @@ export function deriveEnding(verdict: Verdict, config: CompositeConfig, heatAfte
   if (verdict.outcome === 'flagged') return heatAfter >= 100 ? 'burned' : null;
   // outcome === 'clean'
   if (config.substitutedPortrait !== null) return 'complicit';
-  return heatAfter < 50 ? 'clean' : null;
+  return heatAfter < HEAT_WARM_THRESHOLD ? 'clean' : null;
 }

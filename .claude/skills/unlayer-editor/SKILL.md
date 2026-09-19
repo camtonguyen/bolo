@@ -50,7 +50,7 @@ Reached through `ref.current?.editor` — `null` until mounted.
 
 | Method | Use in this project |
 | --- | --- |
-| `getImage()` | Returns `string \| null` **synchronously** -- a data URL, not a promise or a blob. Polled for the live forensic diff (see `src/canvas/diff.ts`, `EditorPanel`'s poll effect) and for the wanted board thumbnail |
+| `getImage()` | Returns `string \| null` **synchronously** -- a data URL, not a promise or a blob. Polled for the live forensic diff (see `src/canvas/diff.ts`, `createEditorWatch` in `src/composer/editorWatch.ts`, ticked by `EditorPanel`) and for the wanted board thumbnail |
 | `hasChanges()` | Cheap, synchronous. Guards every poll loop and every exit path (abandon, transmit) |
 | `reset(url?)` | Load the next photo without a remount. `void \| Promise<void>` |
 | `updateOptions(p)` | Theme + locale only |
@@ -84,9 +84,10 @@ the whole app session, by `EditorSessionProvider` in `TerminalShell` --
 go (`CaseQueue`, `RecordView`, `ComposerStage`) never own the editor's
 lifecycle:
 
-- `ComposerStage` calls `useComposeSession(data)` (see
-  `src/composer/EditorSession.tsx`) to publish its case and to claim a DOM
-  slot for the editor's own markup to render into.
+- `ComposerStage` calls `useComposeSession({ suspect, config, locale })` (see
+  `src/composer/EditorSession.tsx`), which composites the plate, publishes it
+  with the config it was rendered from, and claims a DOM slot for the
+  editor's own markup to render into.
 - The provider portals `<EditorPanel>`'s output into that slot, or into a
   permanently-mounted offscreen fallback div when no screen currently claims
   one -- so the SDK's container node is never removed from the document.

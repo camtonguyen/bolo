@@ -17,7 +17,9 @@ export const ZERO_SUSPICION: Suspicion = { grade: 0, overlay: 0, substitution: 0
 /**
  * Techniques must be read off the config itself, not tracked as separate
  * state -- two sources of truth for "what did the player just do" will
- * drift. The scoring engine and Reyes's suspicion tracking both call this.
+ * drift. Issuing a bulletin (state/issue.ts) and Reyes's note both call
+ * this; evaluate() prices grade and overlay use directly off the config, so
+ * a new technique needs pricing there too.
  */
 export function deriveTechniques(config: CompositeConfig): readonly Technique[] {
   const used: Technique[] = [];

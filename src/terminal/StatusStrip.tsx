@@ -1,8 +1,7 @@
 import { useTerminal, useAct } from '../state/terminal';
 import { actPolicy } from '../state/act';
+import { HEAT_WARM_THRESHOLD } from '../state/ending';
 
-/** Strip reads warm before Internal Affairs is formally involved. */
-const HEAT_WARN_THRESHOLD = 50;
 /** At or above this, Internal Affairs is actively watching — the banner stays up until heat decays back under it. */
 const HEAT_CRITICAL_THRESHOLD = 80;
 
@@ -10,7 +9,7 @@ export function StatusStrip() {
   const { operator, casesClosed, heat, muted, goQueue, goBoard, toggleMuted } = useTerminal();
   const act = useAct();
   const heatTone =
-    heat >= HEAT_CRITICAL_THRESHOLD ? 'text-alert' : heat >= HEAT_WARN_THRESHOLD ? 'text-amber' : '';
+    heat >= HEAT_CRITICAL_THRESHOLD ? 'text-alert' : heat >= HEAT_WARM_THRESHOLD ? 'text-amber' : '';
 
   return (
     <>

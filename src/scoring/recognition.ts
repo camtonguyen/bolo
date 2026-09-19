@@ -1,7 +1,7 @@
 import type { CompositeConfig } from '../canvas/pipeline';
 import { LOOKS } from '../canvas/looks';
 import type { SuspectId } from '../data/suspects';
-import { coverageMatch, overlayCanvasRect } from './markerCoverage';
+import { overlayFootprint, readCoverage } from './markerCoverage';
 import type { Suspicion } from './technique';
 import { actPolicy, type Act } from '../state/act';
 
@@ -52,11 +52,7 @@ const TAMPER = {
 /** Fraction of match that full (1.0) liveDelta can wipe out -- in-editor edits obscure identity the same way an obscuring overlay does, just invisibly to CompositeConfig. */
 const LIVE_DELTA_MATCH_SCALE = 0.6;
 
-const overlayTamper = (config: CompositeConfig): number =>
-  config.overlays.reduce((sum, placement) => {
-    const rect = overlayCanvasRect(placement);
-    return sum + rect.w * rect.h * TAMPER.OVERLAY_AREA_SCALE;
-  }, 0);
+const overlayTamper = (config: CompositeConfig): number => overlayFootprint(config) * TAMPER.OVERLAY_AREA_SCALE;
 
 /**
  * Reyes's whole mechanic: a technique costs more tamper each time it's
@@ -77,11 +73,11 @@ const suspicionMultiplier = (priorUses: number): number => 1 + priorUses * SUSPI
 export function evaluate(config: CompositeConfig, suspect: SuspectId, suspicion: Suspicion, act: Act, liveDelta: number): Verdict {
   const grade = gradeIntensity(config);
 
-  // A substituted portrait carries none of this suspect's markers at all --
-  // there's nothing to obscure, coverage doesn't apply. Tamper stays
-  // whatever grade/overlays/in-editor edits the player also stacked on;
-  // substitution itself costs nothing there, since the photo is a genuine one.
-  const configMatch = config.substitutedPortrait ? 0 : coverageMatch(suspect, config, grade);
+  // A substituted portrait zeroes match (readCoverage reads every marker as
+  // obscured). Tamper stays whatever grade/overlays/in-editor edits the
+  // player also stacked on; substitution itself costs nothing there, since
+  // the photo is a genuine one.
+  const configMatch = readCoverage(suspect, config).match;
   const match = clamp(configMatch * (1 - liveDelta * LIVE_DELTA_MATCH_SCALE));
   const gradeTamper = grade * TAMPER.GRADE_MAX * suspicionMultiplier(suspicion.grade);
   const overlayTamperTotal = overlayTamper(config) * suspicionMultiplier(suspicion.overlay);
