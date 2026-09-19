@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageEditor from '@unlayer/react-image-editor';
-import { useTerminal, useAct } from '../state/terminal';
-import { evaluate } from '../scoring/recognition';
+import { useTerminal } from '../state/terminal';
 import { computeDelta, DIFF_SIZE } from '../canvas/diff';
 import type { CompositeConfig } from '../canvas/pipeline';
 import type { SuspectId } from '../data/suspects';
@@ -73,8 +72,6 @@ function useEditorMinHeight(): number {
 export function EditorPanel({ image, suspect, config, controlNumber, locale, onLiveDeltaChange }: Props) {
   const ref = useRef<ImageEditorRef>(null);
   const issue = useTerminal((s) => s.issue);
-  const suspicion = useTerminal((s) => s.suspicion);
-  const act = useAct();
   const goQueue = useTerminal((s) => s.goQueue);
   const requestPrompt = useTerminal((s) => s.requestPrompt);
   const minHeight = useEditorMinHeight();
@@ -151,10 +148,7 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
   // onSave) and the external TRANSMIT control (via getImage()) -- so they
   // always produce an identical Bulletin.
   const handleSave = (dataUrl: string) => {
-    issue(
-      { suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() },
-      evaluate(config, suspect, suspicion, act, liveDeltaRef.current),
-    );
+    issue({ suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() }, liveDeltaRef.current);
   };
 
   /**

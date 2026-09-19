@@ -1,6 +1,7 @@
 import { OPERATOR_RECORD_ID, CASES_BEFORE_REVEAL } from '../data/suspects';
-import type { Verdict } from '../scoring/recognition';
+import { evaluate } from '../scoring/recognition';
 import { deriveTechniques, incrementSuspicion, type Suspicion } from '../scoring/technique';
+import { deriveAct } from './act';
 import { deriveEnding, type Ending } from './ending';
 import type { Bulletin, Screen } from './terminal';
 
@@ -30,13 +31,24 @@ export interface IssueResult {
 const clampHeat = (n: number): number => Math.max(0, Math.min(100, n));
 
 /**
- * Pure core of the "issue a bulletin" transition: heat, sticky endings,
- * screen routing, and suspicion tracking, all decided in one place and
- * testable without a live store. state/terminal.ts's `issue()` action is a
- * thin adapter that applies the returned state and runs the audio side
- * effects `justRevealed` and `screen` imply.
+ * Pure core of the "issue a bulletin" transition: the verdict, heat, sticky
+ * endings, screen routing, and suspicion tracking, all decided in one place
+ * and testable without a live store. The verdict is scored here, from the
+ * run's own suspicion and act, so a caller can't hand in one that doesn't
+ * match the bulletin. `liveDelta` is the one input the run can't know: the
+ * editor's own tools, read back off the SDK (see canvas/diff.ts).
+ * state/terminal.ts's `issue()` action is a thin adapter that applies the
+ * returned state and runs the audio side effects `justRevealed` and
+ * `screen` imply.
  */
-export function resolveIssue(state: IssueInput, bulletin: Bulletin, verdict: Verdict): IssueResult {
+export function resolveIssue(state: IssueInput, bulletin: Bulletin, liveDelta: number): IssueResult {
+  const verdict = evaluate(
+    bulletin.config,
+    bulletin.suspect,
+    state.suspicion,
+    deriveAct(state.revealed, state.operatorFlagged),
+    liveDelta,
+  );
   const isOperatorCase = bulletin.suspect === OPERATOR_RECORD_ID;
   // Reyes reviews every bulletin, not just the operator's -- the suspicion
   // she's built up by the operator's own turn comes from the player's

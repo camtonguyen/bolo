@@ -7,8 +7,6 @@ import { STAMPS } from '../assets/stamps';
 import { generateControlNumber } from '../lib/brand';
 import { evaluate } from '../scoring/recognition';
 import { isObscured, markerCanvasRect } from '../scoring/markerCoverage';
-import type { Suspicion } from '../scoring/technique';
-import type { Act } from '../state/act';
 import { MARKERS } from '../data/markers';
 import { useComposeSession } from './EditorSession';
 import type { DispatchLocale } from '../lib/unlayer';
@@ -40,8 +38,6 @@ const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 
 export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   const goQueue = useTerminal((s) => s.goQueue);
-  const suspicion = useTerminal((s) => s.suspicion);
-  const act = useAct();
   const [config, setConfig] = useState<CompositeConfig>({
     version: 1,
     look: 'raw',
@@ -286,7 +282,7 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
             </p>
 
             {import.meta.env.DEV && (
-              <DevScorePanel config={config} suspect={suspect} suspicion={suspicion} act={act} liveDelta={liveDelta} />
+              <DevScorePanel config={config} suspect={suspect} liveDelta={liveDelta} />
             )}
           </aside>
 
@@ -362,19 +358,10 @@ function OverlayHandle({
  * by `import.meta.env.DEV`. evaluate() is pure arithmetic on `config`, so
  * this just reads the live outcome as you tweak controls, no extra state.
  */
-function DevScorePanel({
-  config,
-  suspect,
-  suspicion,
-  act,
-  liveDelta,
-}: {
-  config: CompositeConfig;
-  suspect: SuspectId;
-  suspicion: Suspicion;
-  act: Act;
-  liveDelta: number;
-}) {
+function DevScorePanel({ config, suspect, liveDelta }: { config: CompositeConfig; suspect: SuspectId; liveDelta: number }) {
+  // Read here, not in ComposerStage: production builds never render this, so they shouldn't subscribe either.
+  const suspicion = useTerminal((s) => s.suspicion);
+  const act = useAct();
   const v = evaluate(config, suspect, suspicion, act, liveDelta);
   const tone =
     v.outcome === 'clean' ? 'text-phosphor' : v.outcome === 'flagged' ? 'text-alert' : 'text-amber';

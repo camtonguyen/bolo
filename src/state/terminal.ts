@@ -73,7 +73,8 @@ interface TerminalState {
   login: (operator: OperatorId) => void;
   openRecord: (suspect: SuspectId) => void;
   compose: (suspect: SuspectId) => void;
-  issue: (bulletin: Bulletin, verdict: Verdict) => void;
+  /** `liveDelta` is the forensic-diff reading of the editor's own tools -- see resolveIssue. */
+  issue: (bulletin: Bulletin, liveDelta: number) => void;
   decayHeat: () => void;
   goQueue: () => void;
   goBoard: () => void;
@@ -174,11 +175,11 @@ export const useTerminal = create<TerminalState>()(
           }
         }),
 
-      // Thin adapter: resolveIssue (state/issue.ts) decides heat, stickiness,
-      // screen routing, and suspicion; this applies the result and runs the
-      // one side effect (audio) that decision implies.
-      issue: (bulletin, verdict) => {
-        const { justRevealed, ...patch } = resolveIssue(get(), bulletin, verdict);
+      // Thin adapter: resolveIssue (state/issue.ts) scores the bulletin and
+      // decides heat, stickiness, screen routing, and suspicion; this applies
+      // the result and runs the one side effect (audio) that decision implies.
+      issue: (bulletin, liveDelta) => {
+        const { justRevealed, ...patch } = resolveIssue(get(), bulletin, liveDelta);
         set(patch);
         playSquelch();
         if (justRevealed) playAlertTone();
