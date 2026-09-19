@@ -1,9 +1,8 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTerminal, useAct } from '../state/terminal';
 import { isSuspectId, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../data/suspects';
-import { composite, type CompositeConfig, type LookId, type OverlayId } from '../canvas/pipeline';
+import type { CompositeConfig, LookId, OverlayId } from '../canvas/pipeline';
 import { STAMPS } from '../assets/stamps';
-import { generateControlNumber } from '../lib/brand';
 import { evaluate } from '../scoring/recognition';
 import { readCoverage } from '../scoring/markerCoverage';
 import { useComposeSession } from './EditorSession';
@@ -43,11 +42,6 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
     bountyText: '',
     substitutedPortrait: null,
   });
-  const [plate, setPlate] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // One control number per composition session — stamped onto the plate and
-  // carried onto the issued bulletin, so both must agree on the same value.
-  const [controlNumber] = useState(() => generateControlNumber());
   const [locale, setLocale] = useState<DispatchLocale>('en');
   const previewRef = useRef<HTMLDivElement>(null);
   // On for the player's first-ever case (no bulletin issued yet), off after -- by then they've seen the connection once.
@@ -66,39 +60,12 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Syncs the canvas plate to the current config + suspect portrait. Deferred
-  // so fast typing in the bounty line (a config change on every keystroke)
-  // keeps the input itself responsive instead of queuing a full recomposite
-  // -- including a PNG re-encode -- per character.
-  const deferredConfig = useDeferredValue(config);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const portraitUrl = SUSPECTS[deferredConfig.substitutedPortrait ?? suspect].portrait;
-        const dataUrl = await composite(portraitUrl, suspect, deferredConfig, controlNumber);
-        if (!cancelled) setPlate(dataUrl);
-      } catch {
-        if (!cancelled) setError('Portrait scan unavailable.');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [suspect, deferredConfig, controlNumber]);
-
-  // Publishes this case to the one persistent editor instance (see
-  // EditorSession) and claims the DOM slot below for it to render into.
-  // Leaving this screen releases the slot but never clears the published
-  // session -- the editor keeps showing this case until a new one publishes.
-  // Memoized so an unrelated re-render (toggling markers, say) doesn't
-  // re-publish an identical session and cascade a render through the
-  // provider and the persistent editor for nothing.
-  const composeSessionData = useMemo(
-    () => (plate ? { image: plate, suspect, config, controlNumber, locale } : null),
-    [plate, suspect, config, controlNumber, locale],
-  );
-  const { slotRef, liveDelta } = useComposeSession(composeSessionData);
+  // Composites the plate for this case and publishes it to the one persistent
+  // editor instance (see EditorSession), claiming the DOM slot below for it to
+  // render into. Leaving this screen releases the slot but never clears the
+  // published session -- the editor keeps showing this case until a new one
+  // publishes.
+  const { plate, error, slotRef, liveDelta } = useComposeSession({ suspect, config, locale });
 
   // Toggling adds a placement at the overlay's registry default, or removes
   // it if already on the plate.
