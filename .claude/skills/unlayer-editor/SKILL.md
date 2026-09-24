@@ -28,7 +28,7 @@ const ref = useRef<{ editor: ImageEditorInstance | null }>(null);
     },
     features: {
       imageEditor: {
-        dock: 'left',
+        enabled: true,
         tools: {
           resize: false,
           frame: false,
@@ -104,7 +104,14 @@ in-progress edits are worth preserving across navigation.
 Custom stickers · custom fonts · `options.colors` · custom filter presets ·
 programmatic layer insertion · aspect-ratio locking from config ·
 `imageUrl` prop · `editor.exportImage()` · `data.rectImage` · themes beyond
-`'light' | 'dark'`.
+`'light' | 'dark'` · **`features.imageEditor.dock`**.
+
+`dock` is real, but it is not the image editor's. It lives at
+`appearance.panels.tools.dock` and docks the *email* editor's tool panel;
+`features.imageEditor` carries only `enabled` and `tools`
+(`@unlayer/types/dist/editor/features.d.ts`, line 84). An earlier version of
+this page had it in the mount example. There is no way to move the image
+editor's own toolbar from config.
 
 If a task seems to need one of these, composite it ourselves on our own
 `<canvas>` before handing the data URL to the editor.
@@ -122,6 +129,22 @@ edits. So:
 ```tsx
 const options = useMemo(() => ({ /* ... */ }), [locale]); // theme/locale only
 ```
+
+## Translations
+
+`UnlayerTranslations` is `Partial<Record<UnlayerLocale, Partial<Record<UnlayerTranslationKey, string>>>>`,
+so translations are keyed by locale first, then by string key. The SDK ships
+its own strings for every built-in locale -- what belongs here is **only the
+strings this app overrides**, and each override needs an entry per locale it
+should appear in. A `translations` block holding `en` alone means every other
+locale silently falls back to the SDK's stock wording for those keys.
+
+Image-editor keys are namespaced `image_editor.*`; the toolbar ones are
+`save`, `cancel`, `apply`, `undo`, `redo`, `zoom_in`, `zoom_out`,
+`fit_to_screen`, `show_chat`, `hide_chat`. Autocomplete works on them --
+`UnlayerTranslationKey` is a union, widened with `(string & {})`, so a typo
+type-checks and silently does nothing. Check the union in
+`@unlayer/types/dist/editor/intl.d.ts` rather than trusting the compiler.
 
 ## Loading and CORS
 

@@ -49,6 +49,22 @@ function useEditorMinHeight(): number {
 }
 
 /**
+ * The two toolbar strings the terminal renames, in each precinct's own
+ * language. Only our overrides need translating -- the SDK ships its own
+ * strings for the rest of its UI, and stocking only `en` meant the three
+ * other precincts fell back to a stock "Save"/"Cancel" mid-bulletin.
+ *
+ * `translations` is one of the three keys that apply in place, so this never
+ * costs a remount however often the dispatch language changes.
+ */
+const TOOLBAR_TRANSLATIONS = {
+  en: { 'image_editor.toolbar.save': 'Issue bulletin', 'image_editor.toolbar.cancel': 'Abort' },
+  es: { 'image_editor.toolbar.save': 'Emitir boletín', 'image_editor.toolbar.cancel': 'Anular' },
+  fr: { 'image_editor.toolbar.save': 'Émettre le bulletin', 'image_editor.toolbar.cancel': 'Annuler' },
+  de: { 'image_editor.toolbar.save': 'Fahndung ausgeben', 'image_editor.toolbar.cancel': 'Abbrechen' },
+} as const satisfies Record<DispatchLocale, Record<string, string>>;
+
+/**
  * Verified API only — see .claude/skills/unlayer-editor/SKILL.md.
  * Props: image, options, editorId, minHeight, style, onLoad, onSave,
  * onCancel, onLoadError, onError.
@@ -133,12 +149,7 @@ export function EditorPanel({
     () => ({
       theme: 'dark' as const,
       locale,
-      translations: {
-        en: {
-          'image_editor.toolbar.save': 'Issue bulletin',
-          'image_editor.toolbar.cancel': 'Abort',
-        },
-      },
+      translations: TOOLBAR_TRANSLATIONS,
       features: {
         imageEditor: {
           tools: { resize: false },
