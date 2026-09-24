@@ -22,19 +22,28 @@ Live demo: https://bolo-psi.vercel.app
    archival, degraded) and drag the tamper-evidence overlays into place.
 2. **Edit.** The composed plate goes to `@unlayer/react-image-editor` at full
    width: Filter, Crop, Draw, Text, Shapes, Stickers. A live ALTERATION
-   readout tracks what those tools actually do to the plate. Hit **Issue
-   bulletin** in the editor itself, or **TRANSMIT BULLETIN** in the terminal
-   chrome once there's something to send.
+   readout tracks what those tools actually do to the plate, and the match
+   vectors on the preview go dashed as you cover them. The rail locks while
+   those edits are unsaved -- changing the plate underneath the editor would
+   discard them. Hit **Issue bulletin** in the editor itself, or **TRANSMIT
+   BULLETIN** in the terminal chrome once there's something to send.
 3. **Verdict.** Recognition and tamper bars fill. A dispatch response reads
    back. Every issued bulletin lands on the wanted board.
 
 The rail's own controls (plate treatment, overlays, bounty line, substituted
 portrait) score from one plain, serializable object -- no image analysis
-needed there. The SDK editor's own tools (crop, text, stickers) are invisible
-to that object, though, so there's no way to know what they did except by
-looking: a live poll of the editor's own render, diffed against the original
-plate. That's the only pixel comparison anywhere in the game, and it exists
-because the SDK gives no other way to see inside its own tools.
+needed there. The SDK editor's own tools (crop, text, draw, stickers) are
+invisible to that object, though, so there's no way to know what they did
+except by looking: a live poll of the editor's own render, diffed against the
+original plate. That's the only pixel comparison anywhere in the game, and it
+exists because the SDK gives no other way to see inside its own tools.
+
+That diff is taken per match vector, not over the plate as a whole. A feature
+counts as hidden when its own region moved far more than the document did --
+so blacking out one eye with the draw tool takes that vector off the bulletin
+and running a filter over everything does not. Both paths land in the same
+coverage readout the stamps use, which is also what the composer draws, so
+what reads as obscured on screen is exactly what was scored as obscured.
 
 ## Game logic
 
@@ -47,13 +56,14 @@ flowchart TD
 
     subgraph inEditor [Compose screen]
         Rail["Rail controls: plate treatment, overlays,<br/>bounty line, substituted portrait"] --> Config[CompositeConfig]
-        SDKTools["SDK editor's own tools:<br/>crop / text / stickers"] --> Poll["getImage() poll, gated on hasChanges()"]
-        Poll --> Delta["computeDelta() vs. the original plate"]
+        SDKTools["SDK editor's own tools:<br/>crop / text / draw / stickers"] --> Poll["getImage() poll, gated on hasChanges()"]
+        Poll --> Delta["computeDelta() vs. the original plate,<br/>whole frame and per match vector"]
     end
 
+    Poll -.->|"unsaved edits lock the rail"| Rail
     Config --> Issue{"Issue bulletin<br/>(SDK save button or TRANSMIT control)"}
     Delta --> Issue
-    Issue --> Evaluate["evaluate(config, suspect, suspicion, act, liveDelta)"]
+    Issue --> Evaluate["evaluate(config, suspect, suspicion, act, editorReading)"]
     Evaluate --> Verdict["Verdict: match / tamper / outcome"]
     Verdict --> Resolve[resolveIssue]
 

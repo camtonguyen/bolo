@@ -50,6 +50,44 @@ assertEqual(
   'alpha is ignored',
 );
 
+// The whole point of `region`: an edit confined to one corner reads as a
+// small change to the frame and a total change to that corner. Averaging it
+// across the plate -- what the score used to do -- is what made blacking out
+// the margins worth more than blacking out a face.
+{
+  const w = 8;
+  const h = 8;
+  const reference = solid(w, h, [255, 255, 255, 255]);
+  const candidate = solid(w, h, [255, 255, 255, 255]);
+  // Top-left quadrant of the top-left quadrant: 2x2 of 64 pixels.
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      const i = (y * w + x) * 4;
+      candidate.data[i] = candidate.data[i + 1] = candidate.data[i + 2] = 0;
+    }
+  }
+  assertEqual(computeDelta(reference, candidate), 4 / 64, 'over the whole frame the edit all but disappears');
+  assertEqual(
+    computeDelta(reference, candidate, { x: 0, y: 0, w: 0.25, h: 0.25 }),
+    1,
+    'over its own region the same edit reads as total',
+  );
+  assertEqual(
+    computeDelta(reference, candidate, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }),
+    0,
+    'a region the edit never touched reads as untouched',
+  );
+}
+
+// A region thinner than one pixel still describes a real feature, so it
+// reads the pixel it lands on rather than dividing by an empty window.
+{
+  const reference = solid(4, 4, [0, 0, 0, 255]);
+  const candidate = solid(4, 4, [255, 255, 255, 255]);
+  const delta = computeDelta(reference, candidate, { x: 0.5, y: 0.5, w: 0.001, h: 0.001 });
+  assertEqual(delta, 1, 'a sub-pixel region still measures one pixel, never NaN');
+}
+
 let threw = false;
 try {
   computeDelta(solid(2, 2, [0, 0, 0, 255]), solid(3, 3, [0, 0, 0, 255]));
