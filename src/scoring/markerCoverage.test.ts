@@ -1,7 +1,8 @@
 // Run with: npm run test
 import { readCoverage, overlayFootprint, markerRects } from './markerCoverage';
-import type { CompositeConfig } from '../canvas/pipeline';
+import { LOOK_IDS, type CompositeConfig } from '../canvas/pipeline';
 import { MARKERS } from '../data/markers';
+import type { SuspectId } from '../data/suspects';
 import { assertEqual, assertTruthy } from '../test/assert';
 
 const config = (overrides: Partial<CompositeConfig> = {}): CompositeConfig => ({
@@ -44,6 +45,36 @@ assertEqual(readCoverage('DR-0001', config({ look: 'degraded' })).match, 100, "d
   const { markers, match } = readCoverage('DR-0001', config({ substitutedPortrait: 'DR-4417' }));
   assertEqual(match, 0, 'nothing of the original suspect is left to recognise');
   assertTruthy(markers.every((m) => m.obscured), 'every marker reads as obscured, matching the score');
+}
+
+// Grade loses detail in proportion to how hard the look pushes, so a middle
+// treatment is a real choice and not just a dearer archival.
+{
+  const lost = (suspect: SuspectId, look: CompositeConfig['look']) =>
+    readCoverage(suspect, config({ look }))
+      .markers.filter((m) => m.obscured)
+      .map((m) => m.marker.id);
+
+  // The invariant, over the whole cast: a harder grade never gives a feature
+  // back. Without it, "pick the heaviest look" could cost match somewhere.
+  for (const suspect of Object.keys(MARKERS) as SuspectId[]) {
+    const tiers = LOOK_IDS.map((look) => lost(suspect, look));
+    for (let i = 1; i < tiers.length; i++) {
+      assertTruthy(
+        tiers[i - 1].every((id) => tiers[i].includes(id)),
+        `${suspect}: ${LOOK_IDS[i]} keeps everything ${LOOK_IDS[i - 1]} already lost`,
+      );
+    }
+    assertEqual(tiers[0], [], `${suspect}: raw loses nothing, whatever the cutoff scales to`);
+  }
+
+  // And the tiers are genuinely distinct, not three names for one cutoff.
+  assertEqual(lost('DR-4417', 'archival'), ['voss-mouth'], 'archival costs Voss only her mouth');
+  assertEqual(lost('DR-4417', 'microfilm'), ['voss-mouth', 'voss-ear'], 'microfilm costs her the ear as well');
+  assertTruthy(
+    lost('DR-4425', 'degraded').length > lost('DR-4425', 'microfilm').length,
+    'and degraded still takes more than microfilm does',
+  );
 }
 
 // markerRects is what the forensic poll measures against -- same rects the
