@@ -16,7 +16,7 @@ assertEqual([...rawBuffer], rawBefore, 'raw grade leaves the buffer untouched');
 assertEqual(LOOKS.raw.intensity, 0, 'raw carries zero intensity');
 
 // archival and degraded are pure functions of (data, size): same input, same output.
-for (const id of ['archival', 'degraded'] as const) {
+for (const id of ['archival', 'microfilm', 'degraded'] as const) {
   const a = makeBuffer(32, 32, 128);
   const b = makeBuffer(32, 32, 128);
   LOOKS[id].grade(a, { width: 32, height: 32 });
@@ -30,6 +30,32 @@ LOOKS.archival.grade(archivalBuffer, { width: 16, height: 16 });
 assertTruthy(archivalBuffer[0] > 128, 'archival warms the red channel above neutral grey');
 assertTruthy(archivalBuffer[2] < 128, 'archival cools the blue channel below neutral grey');
 assertEqual(LOOKS.archival.intensity, 0.4, 'archival intensity matches the tuned scoring weight');
+
+// microfilm is the cold inverse of archival, and leaves mid-grey where it
+// found it -- its contrast curve fixes both ends and the midpoint, so a flat
+// field only picks up the tint, the grain and the transport banding.
+const microfilmBuffer = makeBuffer(16, 16, 128);
+LOOKS.microfilm.grade(microfilmBuffer, { width: 16, height: 16 });
+{
+  let red = 0;
+  let blue = 0;
+  for (let i = 0; i < microfilmBuffer.length; i += 4) {
+    red += microfilmBuffer[i];
+    blue += microfilmBuffer[i + 2];
+  }
+  assertTruthy(blue > red, 'microfilm cools the field: blue sits above red');
+  const meanRed = red / (microfilmBuffer.length / 4);
+  assertTruthy(Math.abs(meanRed - 118) < 6, `mid-grey survives the contrast curve, got mean red ${meanRed}`);
+}
+assertEqual(LOOKS.microfilm.intensity, 0.7, 'microfilm sits between archival and degraded');
+
+// The four looks are ordered by how hard they push, and scoring reads that
+// order directly -- a look added out of order would silently misprice.
+assertEqual(
+  Object.values(LOOKS).map((l) => l.intensity),
+  [0, 0.4, 0.7, 1],
+  'LOOKS is declared in ascending intensity order',
+);
 
 // degraded posterizes to exactly 3 levels: 0, 127.5, 255.
 const degradedBuffer = makeBuffer(8, 8, 128);

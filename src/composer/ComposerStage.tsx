@@ -11,6 +11,7 @@ import type { DispatchLocale } from '../lib/unlayer';
 const LOOKS: readonly { id: LookId; label: string }[] = [
   { id: 'raw', label: 'RAW SCAN' },
   { id: 'archival', label: 'ARCHIVAL' },
+  { id: 'microfilm', label: 'MICROFILM' },
   { id: 'degraded', label: 'DEGRADED' },
 ];
 

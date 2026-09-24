@@ -44,6 +44,11 @@ const OVERLAY_OBSCURE_FRACTION = 0.6;
  * against this cast's actual canvas-space areas (0.0006-0.03): 0.006 catches
  * genuinely small features (a mole, one ear, a brow) without also catching
  * whole-face regions like a jawline or hairline.
+ *
+ * This is the cutoff at full intensity; a look scales it by its own (see
+ * isObscured). A harder grade loses progressively larger features, which is
+ * what makes a middle treatment a real choice rather than a dearer archival:
+ * at 1 it loses a brow, at 0.7 a mustache, at 0.4 only a mole.
  */
 const GRADE_SMALL_REGION_AREA = 0.006;
 
@@ -83,7 +88,10 @@ function isObscured(
   if (overlayHit) return true;
   if (localExcess > EDITOR_LOCAL_EXCESS) return true;
 
-  return gradeIntensity >= 1 && markerArea < GRADE_SMALL_REGION_AREA;
+  // Scaled, not gated: raw's intensity of 0 puts the cutoff at 0, so it
+  // still obscures nothing, and every look above it loses detail in
+  // proportion to how hard it pushes.
+  return markerArea < GRADE_SMALL_REGION_AREA * gradeIntensity;
 }
 
 export interface MarkerReading {

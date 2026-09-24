@@ -19,7 +19,10 @@ Live demo: https://bolo-psi.vercel.app
 1. **Queue → Record.** Pick a case. A canvas compositor builds the bulletin
    plate (letterhead, seal, ruled fields, the portrait dropped into its
    window) before the editor ever sees it. Choose a plate treatment (raw,
-   archival, degraded) and drag the tamper-evidence overlays into place.
+   archival, microfilm, degraded) and drag the tamper-evidence overlays into
+   place. A heavier treatment loses progressively finer detail -- archival
+   costs a mole, degraded costs a brow -- so the choice is a trade, not a
+   filter.
 2. **Edit.** The composed plate goes to `@unlayer/react-image-editor` at full
    width: Filter, Crop, Draw, Text, Shapes, Stickers. A live ALTERATION
    readout tracks what those tools actually do to the plate, and the match
