@@ -1,5 +1,6 @@
 import { OPERATOR_RECORD_ID, CASES_BEFORE_REVEAL } from '../data/suspects';
 import { evaluate } from '../scoring/recognition';
+import type { EditorReading } from '../scoring/markerCoverage';
 import { deriveTechniques, incrementSuspicion, type Suspicion } from '../scoring/technique';
 import { deriveAct } from './act';
 import { deriveEnding, type Ending } from './ending';
@@ -35,19 +36,19 @@ const clampHeat = (n: number): number => Math.max(0, Math.min(100, n));
  * endings, screen routing, and suspicion tracking, all decided in one place
  * and testable without a live store. The verdict is scored here, from the
  * run's own suspicion and act, so a caller can't hand in one that doesn't
- * match the bulletin. `liveDelta` is the one input the run can't know: the
+ * match the bulletin. `editor` is the one input the run can't know: the
  * editor's own tools, read back off the SDK (see canvas/diff.ts).
  * state/terminal.ts's `issue()` action is a thin adapter that applies the
  * returned state and runs the audio side effects `justRevealed` and
  * `screen` imply.
  */
-export function resolveIssue(state: IssueInput, bulletin: Bulletin, liveDelta: number): IssueResult {
+export function resolveIssue(state: IssueInput, bulletin: Bulletin, editor: EditorReading): IssueResult {
   const verdict = evaluate(
     bulletin.config,
     bulletin.suspect,
     state.suspicion,
     deriveAct(state.revealed, state.operatorFlagged),
-    liveDelta,
+    editor,
   );
   const isOperatorCase = bulletin.suspect === OPERATOR_RECORD_ID;
   // Reyes reviews every bulletin, not just the operator's -- the suspicion

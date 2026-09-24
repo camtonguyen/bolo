@@ -4,6 +4,7 @@ import { OPERATOR_RECORD_ID, type SuspectId } from '../data/suspects';
 import type { CompositeConfig } from '../canvas/pipeline';
 import type { Verdict } from '../scoring/recognition';
 import { ZERO_SUSPICION, type Suspicion } from '../scoring/technique';
+import type { EditorReading } from '../scoring/markerCoverage';
 import { deriveAct, type Act } from './act';
 import type { Ending } from './ending';
 import { resolveIssue } from './issue';
@@ -73,8 +74,8 @@ interface TerminalState {
   login: (operator: OperatorId) => void;
   openRecord: (suspect: SuspectId) => void;
   compose: (suspect: SuspectId) => void;
-  /** `liveDelta` is the forensic-diff reading of the editor's own tools -- see resolveIssue. */
-  issue: (bulletin: Bulletin, liveDelta: number) => void;
+  /** `editor` is the forensic-diff reading of the editor's own tools -- see resolveIssue. */
+  issue: (bulletin: Bulletin, editor: EditorReading) => void;
   decayHeat: () => void;
   goQueue: () => void;
   goBoard: () => void;
@@ -178,8 +179,8 @@ export const useTerminal = create<TerminalState>()(
       // Thin adapter: resolveIssue (state/issue.ts) scores the bulletin and
       // decides heat, stickiness, screen routing, and suspicion; this applies
       // the result and runs the one side effect (audio) that decision implies.
-      issue: (bulletin, liveDelta) => {
-        const { justRevealed, ...patch } = resolveIssue(get(), bulletin, liveDelta);
+      issue: (bulletin, editor) => {
+        const { justRevealed, ...patch } = resolveIssue(get(), bulletin, editor);
         set(patch);
         playSquelch();
         if (justRevealed) playAlertTone();

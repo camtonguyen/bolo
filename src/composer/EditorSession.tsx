@@ -2,6 +2,7 @@ import { createContext, useContext, useDeferredValue, useEffect, useMemo, useSta
 import { createPortal } from 'react-dom';
 import { EditorPanel } from './EditorPanel';
 import { composite, type CompositeConfig } from '../canvas/pipeline';
+import { NO_EDITOR_EDITS, type EditorReading } from '../scoring/markerCoverage';
 import { SUSPECTS, type SuspectId } from '../data/suspects';
 import { generateControlNumber, type ControlNumber } from '../lib/brand';
 import type { DispatchLocale } from '../lib/unlayer';
@@ -20,7 +21,8 @@ export type Plate = Omit<ComposeSessionData, 'locale'>;
 interface EditorSessionContextValue {
   readonly publish: (data: ComposeSessionData) => void;
   readonly setSlot: (node: HTMLDivElement | null) => void;
-  readonly liveDelta: number;
+  readonly reading: EditorReading;
+  readonly editorHasChanges: boolean;
 }
 
 const EditorSessionContext = createContext<EditorSessionContextValue | null>(null);
@@ -42,13 +44,14 @@ const EditorSessionContext = createContext<EditorSessionContextValue | null>(nul
 export function EditorSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<ComposeSessionData | null>(null);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
-  const [liveDelta, setLiveDelta] = useState(0);
+  const [reading, setReading] = useState<EditorReading>(NO_EDITOR_EDITS);
+  const [editorHasChanges, setEditorHasChanges] = useState(false);
   const [fallback, setFallback] = useState<HTMLDivElement | null>(null);
 
   // setSession/setSlot are useState setters -- already stable, no need to wrap them.
   const value = useMemo<EditorSessionContextValue>(
-    () => ({ publish: setSession, setSlot, liveDelta }),
-    [setSlot, liveDelta],
+    () => ({ publish: setSession, setSlot, reading, editorHasChanges }),
+    [setSlot, reading, editorHasChanges],
   );
 
   const portalTarget = slot ?? fallback;
@@ -66,7 +69,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
             config={session.config}
             controlNumber={session.controlNumber}
             locale={session.locale}
-            onLiveDeltaChange={setLiveDelta}
+            onReadingChange={setReading}
+            onHasChangesChange={setEditorHasChanges}
           />,
           portalTarget,
         )}
@@ -98,10 +102,17 @@ export function useComposeSession({
   suspect: SuspectId;
   config: CompositeConfig;
   locale: DispatchLocale;
-}): { plate: Plate | null; error: string | null; slotRef: (node: HTMLDivElement | null) => void; liveDelta: number } {
+}): {
+  plate: Plate | null;
+  error: string | null;
+  slotRef: (node: HTMLDivElement | null) => void;
+  reading: EditorReading;
+  /** True while the editor holds unsaved edits -- the rail locks, because recompositing would discard them. */
+  editorHasChanges: boolean;
+} {
   const ctx = useContext(EditorSessionContext);
   if (!ctx) throw new Error('useComposeSession must be used within an EditorSessionProvider');
-  const { publish, setSlot, liveDelta } = ctx;
+  const { publish, setSlot, reading, editorHasChanges } = ctx;
 
   // One control number per composition session -- stamped onto every plate
   // and carried onto the issued bulletin.
@@ -142,5 +153,5 @@ export function useComposeSession({
 
   useEffect(() => () => setSlot(null), [setSlot]);
 
-  return { plate, error, slotRef: setSlot, liveDelta };
+  return { plate, error, slotRef: setSlot, reading, editorHasChanges };
 }

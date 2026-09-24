@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageEditor from '@unlayer/react-image-editor';
 import { useTerminal } from '../state/terminal';
 import { createEditorWatch, WATCH_INTERVAL_MS } from './editorWatch';
+import { markerRects, NO_EDITOR_EDITS, type EditorReading } from '../scoring/markerCoverage';
 import type { CompositeConfig } from '../canvas/pipeline';
 import type { SuspectId } from '../data/suspects';
 import type { DispatchLocale, EditorOptions, ImageEditorRef, SaveResult } from '../lib/unlayer';
@@ -13,8 +14,17 @@ interface Props {
   config: CompositeConfig;
   controlNumber: ControlNumber;
   locale: DispatchLocale;
-  /** Lifts the live forensic-diff reading up for ComposerStage's readout (Part 1.4) -- display only, EditorPanel keeps its own copy for scoring. */
-  onLiveDeltaChange?: (delta: number) => void;
+  /** Lifts the live forensic-diff reading up for ComposerStage's readout and marker overlay -- display only, EditorPanel keeps its own copy for scoring. */
+  onReadingChange?: (reading: EditorReading) => void;
+  /**
+   * Lifts hasChanges() up so ComposerStage can lock the rail while there are
+   * unsaved in-editor edits. Any rail change recomposites the plate, which
+   * the SDK takes as a new `image` and internally resets to -- silently
+   * discarding whatever crop/text/draw work is in progress (see the
+   * unlayer-editor skill). The lock is the only thing standing between the
+   * player and that loss.
+   */
+  onHasChangesChange?: (hasChanges: boolean) => void;
 }
 
 /** Matches Tailwind's default `lg` breakpoint -- the point where the controls rail moves beside the editor instead of above it. */
@@ -43,39 +53,59 @@ function useEditorMinHeight(): number {
  * Props: image, options, editorId, minHeight, style, onLoad, onSave,
  * onCancel, onLoadError, onError.
  */
-export function EditorPanel({ image, suspect, config, controlNumber, locale, onLiveDeltaChange }: Props) {
+export function EditorPanel({
+  image,
+  suspect,
+  config,
+  controlNumber,
+  locale,
+  onReadingChange,
+  onHasChangesChange,
+}: Props) {
   const ref = useRef<ImageEditorRef>(null);
   const issue = useTerminal((s) => s.issue);
   const goQueue = useTerminal((s) => s.goQueue);
   const requestPrompt = useTerminal((s) => s.requestPrompt);
   const minHeight = useEditorMinHeight();
 
-  const liveDeltaRef = useRef(0);
+  const readingRef = useRef<EditorReading>(NO_EDITOR_EDITS);
 
-  // onLiveDeltaChange is always the EditorSessionProvider's useState setter
-  // in practice, which React guarantees is stable -- so it's safe to close
-  // over directly and list as a dependency below, no ref-mirroring needed.
-  const reportLiveDelta = useCallback(
-    (delta: number) => {
-      liveDeltaRef.current = delta;
-      onLiveDeltaChange?.(delta);
+  // The onX callbacks are always EditorSessionProvider's useState setters in
+  // practice, which React guarantees are stable -- so they're safe to close
+  // over directly and list as dependencies below, no ref-mirroring needed.
+  const reportReading = useCallback(
+    (reading: EditorReading) => {
+      readingRef.current = reading;
+      onReadingChange?.(reading);
     },
-    [onLiveDeltaChange],
+    [onReadingChange],
   );
 
   const [hasChanges, setHasChanges] = useState(false);
+  const reportHasChanges = useCallback(
+    (changed: boolean) => {
+      setHasChanges(changed);
+      onHasChangesChange?.(changed);
+    },
+    [onHasChangesChange],
+  );
+
   // useState, not useMemo: the watch holds a baseline and in-flight state, so
   // it must never be silently recreated.
-  const [watch] = useState(() => createEditorWatch({ onHasChanges: setHasChanges, onDelta: reportLiveDelta }));
+  const [watch] = useState(() => createEditorWatch({ onHasChanges: reportHasChanges, onDelta: reportReading }));
+
+  // Which regions the poll measures -- this suspect's own markers. Memoized
+  // so it doesn't re-baseline the watch on every unrelated render.
+  const regions = useMemo(() => markerRects(suspect), [suspect]);
 
   // Re-baselines whenever `image` changes -- a rail edit (bounty line,
   // overlay toggle) recomposites the plate, which react-image-editor picks up
   // as a new `image` prop and resets itself to internally (see the
-  // unlayer-editor skill), so liveDelta must always measure divergence from
+  // unlayer-editor skill), so the reading must always measure divergence from
   // whatever the editor is currently showing.
   useEffect(() => {
-    watch.reset(image);
-  }, [image, watch]);
+    watch.reset(image, regions);
+  }, [image, regions, watch]);
 
   // hasChanges() drives the external TRANSMIT control every tick; the rest of
   // the loop's rules (cadence, skipping a busy decode) live in editorWatch.ts.
@@ -88,7 +118,7 @@ export function EditorPanel({ image, suspect, config, controlNumber, locale, onL
   // onSave) and the external TRANSMIT control (via getImage()) -- so they
   // always produce an identical Bulletin.
   const handleSave = (dataUrl: string) => {
-    issue({ suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() }, liveDeltaRef.current);
+    issue({ suspect, controlNumber, posterDataUrl: dataUrl, config, issuedAt: Date.now() }, readingRef.current);
   };
 
   /**

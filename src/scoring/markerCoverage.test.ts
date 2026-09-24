@@ -1,5 +1,5 @@
 // Run with: npm run test
-import { readCoverage, overlayFootprint } from './markerCoverage';
+import { readCoverage, overlayFootprint, markerRects } from './markerCoverage';
 import type { CompositeConfig } from '../canvas/pipeline';
 import { MARKERS } from '../data/markers';
 import { assertEqual, assertTruthy } from '../test/assert';
@@ -44,6 +44,51 @@ assertEqual(readCoverage('DR-0001', config({ look: 'degraded' })).match, 100, "d
   const { markers, match } = readCoverage('DR-0001', config({ substitutedPortrait: 'DR-4417' }));
   assertEqual(match, 0, 'nothing of the original suspect is left to recognise');
   assertTruthy(markers.every((m) => m.obscured), 'every marker reads as obscured, matching the score');
+}
+
+// markerRects is what the forensic poll measures against -- same rects the
+// readout reports, so the poll can't end up measuring somewhere else.
+{
+  const rects = markerRects('DR-0001');
+  assertEqual(
+    rects.map((r) => r.id),
+    readCoverage('DR-0001', config()).markers.map((m) => m.marker.id),
+    'markerRects and readCoverage agree on which markers exist, in order',
+  );
+  assertEqual(
+    rects.map((r) => r.rect),
+    readCoverage('DR-0001', config()).markers.map((m) => m.rect),
+    'and on where each one sits',
+  );
+}
+
+// An in-editor edit hides a marker when its own region moved far more than
+// the plate did. A global change -- every region moving with the frame --
+// hides nothing, which is the whole reason the reading is an excess and not
+// a raw delta.
+{
+  const local = readCoverage('DR-0001', config(), { frame: 0.02, regions: { 'operator-eyes': 0.6 } });
+  assertEqual(local.markers.find((m) => m.marker.id === 'operator-eyes')?.obscured, true, 'a local redaction hides its feature');
+  assertEqual(local.editorObscured, 1, 'and is counted as the editor having done it');
+  assertEqual(local.match, 75, 'costing exactly that marker its weight');
+
+  const global = readCoverage('DR-0001', config(), {
+    frame: 0.6,
+    regions: { 'operator-hairline': 0.6, 'operator-jawline': 0.6, 'operator-eyes': 0.6, 'operator-ears': 0.6 },
+  });
+  assertEqual(global.match, 100, 'a change spread evenly over the plate hides nobody');
+  assertEqual(global.editorObscured, 0, 'and is not charged as a redaction');
+}
+
+// A marker an overlay already covers is not also counted against the editor.
+{
+  const both = readCoverage('DR-0001', config({ overlays: [{ id: 'glare', x: 0.5, y: 0.4 }] }), {
+    frame: 0,
+    regions: { 'operator-eyes': 0.6 },
+  });
+  const overlayOnly = readCoverage('DR-0001', config({ overlays: [{ id: 'glare', x: 0.5, y: 0.4 }] }));
+  assertEqual(both.match, overlayOnly.match, 'drawing over a stamped marker changes nothing');
+  assertEqual(both.editorObscured, 0, 'and is never double-counted');
 }
 
 // Tamper is priced by footprint: the widest stamp is ~0.074 of the plate (0.55 wide, 3:1, on a 1000x1360 plate).

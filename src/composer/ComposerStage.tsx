@@ -4,7 +4,7 @@ import { isSuspectId, OPERATOR_RECORD_ID, SUSPECTS, type SuspectId } from '../da
 import type { CompositeConfig, LookId, OverlayId } from '../canvas/pipeline';
 import { STAMPS } from '../assets/stamps';
 import { evaluate } from '../scoring/recognition';
-import { readCoverage } from '../scoring/markerCoverage';
+import { readCoverage, type EditorReading } from '../scoring/markerCoverage';
 import { useComposeSession } from './EditorSession';
 import type { DispatchLocale } from '../lib/unlayer';
 
@@ -65,7 +65,19 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
   // render into. Leaving this screen releases the slot but never clears the
   // published session -- the editor keeps showing this case until a new one
   // publishes.
-  const { plate, error, slotRef, liveDelta } = useComposeSession({ suspect, config, locale });
+  const { plate, error, slotRef, reading, editorHasChanges } = useComposeSession({ suspect, config, locale });
+
+  /**
+   * Every rail control recomposites the plate, and a recomposite is a new
+   * `image` prop, which the SDK silently resets the live editor to -- taking
+   * any in-progress crop/text/draw work with it (see the unlayer-editor
+   * skill). So the rail closes while the editor holds unsaved edits: transmit
+   * them or abort, then the plate is editable again.
+   *
+   * Dispatch language stays open: it maps to the editor's own `locale`, which
+   * updates in place and never touches the composited plate.
+   */
+  const locked = editorHasChanges;
 
   // Toggling adds a placement at the overlay's registry default, or removes
   // it if already on the plate.
@@ -104,18 +116,22 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
             <button onClick={goQueue} className="text-phosphor-dim hover:text-amber">
               ← CANCEL
             </button>
+
+            {locked && <PlateLockNotice />}
+
             <div className="space-y-1">
               <p className="text-phosphor-dim">PLATE TREATMENT</p>
               {LOOKS.map((l) => (
                 <button
                   key={l.id}
                   onClick={() => setConfig((c) => ({ ...c, look: l.id }))}
+                  disabled={locked}
                   aria-pressed={config.look === l.id}
                   className={`block w-full border px-2 py-1.5 text-left tracking-wider ${
                     config.look === l.id
                       ? 'border-amber text-amber'
-                      : 'border-phosphor-dim/40 text-phosphor-dim hover:border-phosphor'
-                  }`}
+                      : 'border-phosphor-dim/40 text-phosphor-dim enabled:hover:border-phosphor'
+                  } ${locked ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   {l.label}
                 </button>
@@ -129,10 +145,13 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
                   <button
                     key={o.id}
                     onClick={() => toggleOverlay(o.id)}
+                    disabled={locked}
                     aria-pressed={active}
                     className={`block w-full border px-2 py-1.5 text-left tracking-wider ${
-                      active ? 'border-alert text-alert' : 'border-phosphor-dim/40 text-phosphor-dim hover:border-phosphor'
-                    }`}
+                      active
+                        ? 'border-alert text-alert'
+                        : 'border-phosphor-dim/40 text-phosphor-dim enabled:hover:border-phosphor'
+                    } ${locked ? 'cursor-not-allowed opacity-40' : ''}`}
                   >
                     {o.label}
                   </button>
@@ -146,13 +165,16 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
                 <span className="text-phosphor-dim">SOURCE PORTRAIT</span>
                 <select
                   value={config.substitutedPortrait ?? ''}
+                  disabled={locked}
                   onChange={(e) =>
                     setConfig((c) => ({
                       ...c,
                       substitutedPortrait: isSuspectId(e.target.value) ? e.target.value : null,
                     }))
                   }
-                  className="w-full border border-phosphor-dim bg-transparent px-2 py-1.5"
+                  className={`w-full border border-phosphor-dim bg-transparent px-2 py-1.5 ${
+                    locked ? 'cursor-not-allowed opacity-40' : ''
+                  }`}
                 >
                   <option value="">own record</option>
                   {(Object.keys(SUSPECTS) as SuspectId[])
@@ -187,11 +209,19 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
                   MARKERS (M)
                 </button>
               </div>
-              {config.overlays.length > 0 && <p className="text-[10px] text-phosphor-dim">Drag to reposition.</p>}
+              {config.overlays.length > 0 && !locked && (
+                <p className="text-[10px] text-phosphor-dim">Drag to reposition.</p>
+              )}
               <div ref={previewRef} className="relative w-full touch-none select-none border border-phosphor-dim">
                 <img src={plate.image} alt="" className="block w-full" draggable={false} />
+                {/*
+                  Read with the live forensic reading, not just the config, so a
+                  marker the player blacks out with the SDK's own draw or crop
+                  tools goes dashed here too. What reads as obscured on this
+                  preview is exactly what evaluate() scored as obscured.
+                */}
                 {showMarkers &&
-                  readCoverage(suspect, plate.config).markers.map(({ marker, rect, obscured }) => (
+                  readCoverage(suspect, plate.config, reading).markers.map(({ marker, rect, obscured }) => (
                     <div
                       key={marker.id}
                       aria-hidden
@@ -206,9 +236,10 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
                       }}
                     />
                   ))}
-                {config.overlays.map((o) => (
-                  <OverlayHandle key={o.id} id={o.id} x={o.x} y={o.y} containerRef={previewRef} onDrop={moveOverlay} />
-                ))}
+                {!locked &&
+                  config.overlays.map((o) => (
+                    <OverlayHandle key={o.id} id={o.id} x={o.x} y={o.y} containerRef={previewRef} onDrop={moveOverlay} />
+                  ))}
               </div>
             </div>
 
@@ -216,9 +247,12 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               <span className="text-phosphor-dim">BOUNTY LINE</span>
               <input
                 value={config.bountyText}
+                disabled={locked}
                 onChange={(e) => setConfig((c) => ({ ...c, bountyText: e.target.value }))}
                 placeholder="REWARD $45,000"
-                className="w-full border border-phosphor-dim bg-transparent px-2 py-1"
+                className={`w-full border border-phosphor-dim bg-transparent px-2 py-1 ${
+                  locked ? 'cursor-not-allowed opacity-40' : ''
+                }`}
               />
             </label>
 
@@ -237,14 +271,12 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
               </select>
             </label>
 
-            {/* Terminal-styled readout, not a progress bar -- the payoff for Part 1: proof that the SDK's own crop/text/sticker tools do something, updating live as the player uses them. */}
+            {/* Terminal-styled readout, not a progress bar -- proof that the SDK's own crop/text/draw tools do something, updating live as the player uses them. */}
             <p className="font-mono text-[11px] tracking-wider text-phosphor-dim">
-              ALTERATION: <span className="text-amber">{Math.round(liveDelta * 100)}%</span>
+              ALTERATION: <span className="text-amber">{Math.round(reading.frame * 100)}%</span>
             </p>
 
-            {import.meta.env.DEV && (
-              <DevScorePanel config={plate.config} suspect={suspect} liveDelta={liveDelta} />
-            )}
+            {import.meta.env.DEV && <DevScorePanel config={plate.config} suspect={suspect} reading={reading} />}
           </aside>
 
           {/*
@@ -259,6 +291,23 @@ export function ComposerStage({ suspect }: { suspect: SuspectId }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Why the rail just went dim. In-world it reads as the terminal protecting a
+ * plate that's already on the working surface; out of world it's the one
+ * thing keeping a stray keystroke in the bounty line from wiping a careful
+ * redaction.
+ */
+function PlateLockNotice() {
+  return (
+    <p
+      aria-live="polite"
+      className="border border-amber/60 bg-amber/10 px-2 py-1.5 text-[10px] leading-relaxed tracking-wider text-amber"
+    >
+      PLATE LOCKED — EDITS PENDING ON THE WORKING COPY. TRANSMIT OR ABORT TO ALTER THE PLATE.
+    </p>
   );
 }
 
@@ -319,11 +368,19 @@ function OverlayHandle({
  * by `import.meta.env.DEV`. evaluate() is pure arithmetic on `config`, so
  * this just reads the live outcome as you tweak controls, no extra state.
  */
-function DevScorePanel({ config, suspect, liveDelta }: { config: CompositeConfig; suspect: SuspectId; liveDelta: number }) {
+function DevScorePanel({
+  config,
+  suspect,
+  reading,
+}: {
+  config: CompositeConfig;
+  suspect: SuspectId;
+  reading: EditorReading;
+}) {
   // Read here, not in ComposerStage: production builds never render this, so they shouldn't subscribe either.
   const suspicion = useTerminal((s) => s.suspicion);
   const act = useAct();
-  const v = evaluate(config, suspect, suspicion, act, liveDelta);
+  const v = evaluate(config, suspect, suspicion, act, reading);
   const tone =
     v.outcome === 'clean' ? 'text-phosphor' : v.outcome === 'flagged' ? 'text-alert' : 'text-amber';
   return (
